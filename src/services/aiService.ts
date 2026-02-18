@@ -6,9 +6,28 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
+const GEMINI_LOG_PREFIX = '[Gemini API]';
 
 const inMemoryTTSCache = new Map<string, string>();
 const aiClient = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
+
+function logGeminiInfo(message: string, payload?: unknown): void {
+  if (payload === undefined) {
+    console.info(`${GEMINI_LOG_PREFIX} ${message}`);
+    return;
+  }
+
+  console.info(`${GEMINI_LOG_PREFIX} ${message}`, payload);
+}
+
+function logGeminiError(message: string, payload?: unknown): void {
+  if (payload === undefined) {
+    console.error(`${GEMINI_LOG_PREFIX} ${message}`);
+    return;
+  }
+
+  console.error(`${GEMINI_LOG_PREFIX} ${message}`, payload);
+}
 
 function readFromLocalStorageCache(text: string): string | undefined {
   if (typeof window === 'undefined') {
@@ -48,24 +67,34 @@ function extractAudioData(response: unknown): string | undefined {
 
 export async function getTTSAudio(text: string): Promise<string | undefined> {
   if (!text.trim()) {
+    logGeminiInfo('TTS skipped because text is empty.');
     return undefined;
   }
 
   if (inMemoryTTSCache.has(text)) {
+    logGeminiInfo('TTS cache hit (memory).', { textPreview: text.slice(0, 80) });
     return inMemoryTTSCache.get(text);
   }
 
   const localCached = readFromLocalStorageCache(text);
   if (localCached) {
+    logGeminiInfo('TTS cache hit (localStorage).', { textPreview: text.slice(0, 80) });
     inMemoryTTSCache.set(text, localCached);
     return localCached;
   }
 
   if (!aiClient) {
+    logGeminiError('TTS failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
     return undefined;
   }
 
   try {
+    logGeminiInfo('TTS request started.', {
+      model: TTS_MODEL,
+      textPreview: text.slice(0, 120),
+      textLength: text.length,
+    });
+
     const response = await aiClient.models.generateContent({
       model: TTS_MODEL,
       contents: text,
@@ -83,13 +112,32 @@ export async function getTTSAudio(text: string): Promise<string | undefined> {
 
     const audioBase64 = extractAudioData(response);
     if (!audioBase64) {
+      logGeminiError('TTS response failed: no audio content in Gemini response.', {
+        model: TTS_MODEL,
+        status: 'fail',
+        response,
+      });
       return undefined;
     }
+
+    logGeminiInfo('TTS response success.', {
+      model: TTS_MODEL,
+      status: 'pass',
+      audioBytesBase64Length: audioBase64.length,
+      textPreview: text.slice(0, 120),
+    });
 
     inMemoryTTSCache.set(text, audioBase64);
     writeToLocalStorageCache(text, audioBase64);
     return audioBase64;
-  } catch {
+  } catch (error) {
+    logGeminiError('TTS request failed.', {
+      model: TTS_MODEL,
+      status: 'fail',
+      textPreview: text.slice(0, 120),
+      error,
+    });
+
     return undefined;
   }
 }
@@ -100,19 +148,60 @@ export async function generateCommentary(
   points: number,
 ): Promise<string | undefined> {
   if (!aiClient) {
+    logGeminiError('Commentary failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
     return undefined;
   }
 
   try {
     const prompt = `Write one witty, family-friendly sentence for a live quiz host. Team: ${teamName}. Outcome: ${isCorrect ? 'correct answer' : 'wrong answer'}. Points: ${points}. Keep it under 18 words.`;
+
+    logGeminiInfo('Commentary request started.', {
+      model: TEXT_MODEL,
+      teamName,
+      isCorrect,
+      points,
+      prompt,
+    });
+
     const response = await aiClient.models.generateContent({
       model: TEXT_MODEL,
       contents: prompt,
     });
 
     const text = response.text?.trim();
+    if (!text) {
+      logGeminiError('Commentary response failed: empty text.', {
+        model: TEXT_MODEL,
+        status: 'fail',
+        teamName,
+        isCorrect,
+        points,
+        response,
+      });
+
+      return undefined;
+    }
+
+    logGeminiInfo('Commentary response success.', {
+      model: TEXT_MODEL,
+      status: 'pass',
+      content: text,
+      teamName,
+      isCorrect,
+      points,
+    });
+
     return text || undefined;
-  } catch {
+  } catch (error) {
+    logGeminiError('Commentary request failed.', {
+      model: TEXT_MODEL,
+      status: 'fail',
+      teamName,
+      isCorrect,
+      points,
+      error,
+    });
+
     return undefined;
   }
 }
