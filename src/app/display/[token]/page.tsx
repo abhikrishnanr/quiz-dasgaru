@@ -14,6 +14,7 @@ export default function DisplayPage() {
     const [errorPayload, setErrorPayload] = useState<any>(null);
     const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
     const [isTestAudioRunning, setIsTestAudioRunning] = useState(false);
+    const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
     const { speak } = useAudioController();
 
     useEffect(() => {
@@ -193,6 +194,13 @@ export default function DisplayPage() {
                         >
                             {isTestAudioRunning ? 'Testing Audio…' : 'Test Sample Audio'}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsScorePanelOpen((prev) => !prev)}
+                            className="px-4 py-2 rounded-xl bg-indigo-500/15 border border-indigo-400/30 text-indigo-300 font-black uppercase text-[11px] tracking-widest hover:bg-indigo-500/25 transition"
+                        >
+                            {isScorePanelOpen ? 'Hide Scores' : 'Show Scores'}
+                        </button>
                         {isLive && (
                             <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
                                 <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
@@ -209,132 +217,93 @@ export default function DisplayPage() {
                 </div>
             </header>
 
-            {/* Performance Summary Cards */}
-            <section className="max-w-[1920px] mx-auto px-6 pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Standard Leader */}
-                    <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 text-indigo-500/10 text-6xl font-black italic select-none group-hover:text-indigo-500/20 transition-colors">STD</div>
-                        <div className="relative z-10">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Standard Leader</h3>
-                            <div className="flex items-end gap-3">
-                                <span className="text-4xl font-black text-white italic tracking-tighter truncate max-w-[70%]">
-                                    {data.summary?.topStandard?.name || '---'}
-                                </span>
-                                <span className="text-xl font-mono font-black text-indigo-400 mb-1">
-                                    {data.summary?.topStandard?.score || 0} pts
-                                </span>
+
+            <aside className={`fixed inset-y-0 right-0 z-30 w-full max-w-3xl border-l border-slate-800 bg-[#0b1220]/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ${isScorePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="h-full overflow-y-auto p-6 lg:p-8 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-2xl font-black tracking-tighter uppercase text-slate-200">Score Panel</h2>
+                        <button
+                            type="button"
+                            onClick={() => setIsScorePanelOpen(false)}
+                            className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-black uppercase text-[11px] tracking-widest hover:bg-slate-700 transition"
+                        >
+                            Close
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-3xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 text-indigo-500/10 text-6xl font-black italic select-none group-hover:text-indigo-500/20 transition-colors">STD</div>
+                            <div className="relative z-10">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Standard Leader</h3>
+                                <div className="flex items-end gap-3">
+                                    <span className="text-3xl font-black text-white italic tracking-tighter truncate max-w-[70%]">{data.summary?.topStandard?.name || '---'}</span>
+                                    <span className="text-lg font-mono font-black text-indigo-400 mb-1">{data.summary?.topStandard?.score || 0} pts</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-3xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 text-pink-500/10 text-6xl font-black italic select-none group-hover:text-pink-500/20 transition-colors">BZR</div>
+                            <div className="relative z-10">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Buzzer Master</h3>
+                                <div className="flex items-end gap-3">
+                                    <span className="text-3xl font-black text-white italic tracking-tighter truncate max-w-[70%]">{data.summary?.topBuzzer?.name || '---'}</span>
+                                    <span className="text-lg font-mono font-black text-pink-500 mb-1">{data.summary?.topBuzzer?.score || 0} pts</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-3xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 text-emerald-500/10 text-6xl font-black italic select-none group-hover:text-emerald-500/20 transition-colors">STAT</div>
+                            <div className="relative z-10">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Session Stats</h3>
+                                <div className="flex gap-6">
+                                    <div><div className="text-xs font-bold text-slate-500">Teams</div><div className="text-2xl font-black text-white">{data.summary?.totalTeams || 0}</div></div>
+                                    <div><div className="text-xs font-bold text-slate-500">Answered</div><div className="text-2xl font-black text-white">{data.summary?.totalQuestionsAnswered || 0}</div></div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Buzzer Leader */}
-                    <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 text-pink-500/10 text-6xl font-black italic select-none group-hover:text-pink-500/20 transition-colors">BZR</div>
-                        <div className="relative z-10">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Buzzer Master</h3>
-                            <div className="flex items-end gap-3">
-                                <span className="text-4xl font-black text-white italic tracking-tighter truncate max-w-[70%]">
-                                    {data.summary?.topBuzzer?.name || '---'}
-                                </span>
-                                <span className="text-xl font-mono font-black text-pink-500 mb-1">
-                                    {data.summary?.topBuzzer?.score || 0} pts
-                                </span>
-                            </div>
+                    <div>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-2xl font-black tracking-tighter uppercase text-slate-400">Leaderboard</h3>
+                            <span className="text-xs font-bold text-slate-500 bg-slate-800 px-3 py-1 rounded-full">{leaderboard.length} Teams</span>
                         </div>
-                    </div>
-
-                    {/* Session Stats */}
-                    <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 text-emerald-500/10 text-6xl font-black italic select-none group-hover:text-emerald-500/20 transition-colors">STAT</div>
-                        <div className="relative z-10">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Session Stats</h3>
-                            <div className="flex gap-8">
-                                <div>
-                                    <div className="text-xs font-bold text-slate-500">Teams</div>
-                                    <div className="text-3xl font-black text-white">{data.summary?.totalTeams || 0}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-slate-500">Answered</div>
-                                    <div className="text-3xl font-black text-white">{data.summary?.totalQuestionsAnswered || 0}</div>
-                                </div>
-                                <div className="ml-auto flex items-center">
-                                    <div className="h-10 w-10 rounded-full border-4 border-slate-800 border-t-emerald-500 flex items-center justify-center text-[10px] font-bold text-emerald-500">
-                                        {Math.round(((data.summary?.totalQuestionsAnswered || 0) / Math.max(1, data.summary?.totalQuestionsAnswered || 1)) * 100)}%
-                                    </div>
-                                </div>
+                        <div className="bg-slate-900/40 rounded-3xl border border-slate-800/50 shadow-2xl overflow-hidden backdrop-blur-sm">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-800/50 border-b border-slate-700/50 text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">
+                                            <th className="px-6 py-4 w-20 text-center">Rank</th><th className="px-6 py-4">Team</th><th className="px-6 py-4 text-right">Standard</th><th className="px-6 py-4 text-right">Buzzer</th><th className="px-6 py-4 text-right bg-indigo-600/10 text-indigo-400">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {leaderboard.map((team: any, index: number) => (
+                                            <tr key={index} className="transition-all duration-300 group hover:bg-slate-800/30">
+                                                <td className="px-6 py-5 text-center font-mono font-black text-slate-400">{index + 1}</td>
+                                                <td className="px-6 py-5"><div className="font-black text-white text-xl tracking-tighter">{team.name}</div></td>
+                                                <td className="px-6 py-5 text-right font-mono text-slate-500 text-lg">{team.standard}</td>
+                                                <td className="px-6 py-5 text-right font-mono text-slate-500 text-lg">{team.buzzer}</td>
+                                                <td className="px-6 py-5 text-right font-mono font-black text-2xl text-indigo-400 bg-indigo-500/[0.03]">{team.total}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
+            </aside>
+
+            {isScorePanelOpen && (
+                <button type="button" aria-label="Close score panel backdrop" onClick={() => setIsScorePanelOpen(false)} className="fixed inset-0 z-20 bg-slate-950/55" />
+            )}
 
             {/* Main Content Grid */}
-            <main className="max-w-[1920px] mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+            <main className="max-w-[1920px] mx-auto p-6 lg:p-10">
 
-                {/* Left Column: Leaderboard (Col 7) */}
-                <div className="lg:col-span-7 space-y-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-3xl font-black tracking-tighter uppercase text-slate-400">Leaderboard</h2>
-                        <span className="text-xs font-bold text-slate-500 bg-slate-800 px-3 py-1 rounded-full">{leaderboard.length} Teams Registered</span>
-                    </div>
-
-                    <div className="bg-slate-900/40 rounded-3xl border border-slate-800/50 shadow-2xl overflow-hidden backdrop-blur-sm">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-800/50 border-b border-slate-700/50 text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">
-                                        <th className="px-8 py-5 w-24 text-center">Rank</th>
-                                        <th className="px-8 py-5">Team Entity</th>
-                                        <th className="px-8 py-5 text-right">Standard</th>
-                                        <th className="px-8 py-5 text-right">Buzzer</th>
-                                        <th className="px-8 py-5 text-right bg-indigo-600/10 text-indigo-400">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800/50">
-                                    {leaderboard.map((team: any, index: number) => {
-                                        const isTop3 = index < 3;
-                                        return (
-                                            <tr
-                                                key={index}
-                                                className={`transition-all duration-300 group hover:bg-slate-800/30 ${isTop3 ? 'bg-indigo-500/[0.02]' : ''}`}
-                                            >
-                                                <td className="px-8 py-6 text-center">
-                                                    {index === 0 ? (
-                                                        <span className="text-4xl drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]">🥇</span>
-                                                    ) : index === 1 ? (
-                                                        <span className="text-3xl filter grayscale brightness-125">🥈</span>
-                                                    ) : index === 2 ? (
-                                                        <span className="text-3xl filter sepia(1) brightness-125">🥉</span>
-                                                    ) : (
-                                                        <span className="font-mono font-black text-slate-700 group-hover:text-slate-500 text-xl transition-colors">
-                                                            {index + 1 < 10 ? `0${index + 1}` : index + 1}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-8 py-6">
-                                                    <div className="font-black text-white text-2xl tracking-tighter group-hover:translate-x-1 transition-transform">{team.name}</div>
-                                                </td>
-                                                <td className="px-8 py-6 text-right font-mono text-slate-500 text-lg">
-                                                    {team.standard}
-                                                </td>
-                                                <td className="px-8 py-6 text-right font-mono text-slate-500 text-lg">
-                                                    {team.buzzer}
-                                                </td>
-                                                <td className="px-8 py-6 text-right font-mono font-black text-3xl text-indigo-400 bg-indigo-500/[0.03]">
-                                                    {team.total}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Column: Live Data (Col 5) */}
-                <div className="lg:col-span-5 space-y-10">
+                {/* Live Data */}
+                <div className="space-y-10">
 
                     {/* 1. Active Question Panel */}
                     <div className="space-y-4">
