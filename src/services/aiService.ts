@@ -3,7 +3,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
+const TTS_MODEL = 'gemini-3.0-flash';
 const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
