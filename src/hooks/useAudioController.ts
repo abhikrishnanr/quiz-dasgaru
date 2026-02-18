@@ -86,6 +86,7 @@ async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Prom
 export function useAudioController() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const initializedRef = useRef(false);
+  const loadingToneIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || initializedRef.current) {
@@ -217,5 +218,83 @@ export function useAudioController() {
     [playSequence],
   );
 
-  return { isSpeaking, playSequence, speak };
+  const playLoadingTone = useCallback(async (): Promise<boolean> => {
+    const context = ensureAudioContext();
+    if (!context) {
+      return false;
+    }
+
+    if (context.state === 'suspended') {
+      try {
+        await context.resume();
+      } catch {
+        return false;
+      }
+    }
+
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    gain.connect(context.destination);
+
+    const firstTone = context.createOscillator();
+    firstTone.type = 'sine';
+    firstTone.frequency.setValueAtTime(440, now);
+    firstTone.frequency.linearRampToValueAtTime(660, now + 0.2);
+    firstTone.connect(gain);
+    firstTone.start(now);
+    firstTone.stop(now + 0.24);
+
+    const secondTone = context.createOscillator();
+    secondTone.type = 'triangle';
+    secondTone.frequency.setValueAtTime(550, now + 0.2);
+    secondTone.frequency.linearRampToValueAtTime(440, now + 0.45);
+    secondTone.connect(gain);
+    secondTone.start(now + 0.2);
+    secondTone.stop(now + 0.48);
+
+    window.setTimeout(() => {
+      try {
+        gain.disconnect();
+      } catch {
+        // no-op
+      }
+    }, 700);
+
+    return true;
+  }, []);
+
+  const startLoadingTone = useCallback(async (): Promise<void> => {
+    if (loadingToneIntervalRef.current !== null) {
+      return;
+    }
+
+    await playLoadingTone();
+    loadingToneIntervalRef.current = window.setInterval(() => {
+      void playLoadingTone();
+    }, 1600);
+  }, [playLoadingTone]);
+
+  const stopLoadingTone = useCallback((): void => {
+    if (loadingToneIntervalRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(loadingToneIntervalRef.current);
+    loadingToneIntervalRef.current = null;
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (loadingToneIntervalRef.current !== null) {
+        window.clearInterval(loadingToneIntervalRef.current);
+        loadingToneIntervalRef.current = null;
+      }
+    },
+    [],
+  );
+
+  return { isSpeaking, playSequence, speak, startLoadingTone, stopLoadingTone };
 }

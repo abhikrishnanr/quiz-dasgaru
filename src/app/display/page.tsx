@@ -80,8 +80,9 @@ export default function DisplayPage() {
   const announcedResultRef = useRef<string | null>(null);
   const pendingQuestionRef = useRef<string | null>(null);
   const announcedTenSecondRef = useRef<string | null>(null);
+  const questionRequestRef = useRef(0);
 
-  const { isSpeaking, playSequence, speak } = useAudioController();
+  const { isSpeaking, playSequence, speak, startLoadingTone, stopLoadingTone } = useAudioController();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -212,20 +213,62 @@ export default function DisplayPage() {
     if (!currentQuestionId || !current?.question?.text || questionOptions.length === 0) return;
     if (pendingQuestionRef.current === currentQuestionId || visibleQuestionId === currentQuestionId) return;
 
+    questionRequestRef.current += 1;
+    const requestId = questionRequestRef.current;
+    let cancelled = false;
+
     pendingQuestionRef.current = currentQuestionId;
     setIsQuestionLoading(true);
 
     const optionsText = questionOptions.map((option) => `${option.key}. ${option.text}`).join('. ');
     const questionPrompt = `Question for ${activeTeamName}. ${current.question.text}. Options are ${optionsText}.`;
+    const loadingAnnouncement = 'Preparing your next question. Please get ready.';
+    const audioReadyTimeoutMs = 9_000;
+
+    const resolveWithinTimeout = async <T,>(promise: Promise<T>, fallback: T, timeoutMs: number): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => {
+          window.setTimeout(() => resolve(fallback), timeoutMs);
+        }),
+      ]);
+    };
 
     void (async () => {
-      await speak(questionPrompt);
-      setVisibleQuestionId(currentQuestionId);
-      setIsQuestionLoading(false);
-      pendingQuestionRef.current = null;
-      announcedTenSecondRef.current = null;
+      await startLoadingTone();
+
+      try {
+        const [preparingAudio, questionAudio] = await Promise.all([
+          resolveWithinTimeout(getTTSAudio(loadingAnnouncement), undefined, audioReadyTimeoutMs),
+          resolveWithinTimeout(getTTSAudio(questionPrompt), undefined, audioReadyTimeoutMs),
+        ]);
+
+        if (cancelled || questionRequestRef.current !== requestId) return;
+
+        setVisibleQuestionId(currentQuestionId);
+        setIsQuestionLoading(false);
+        pendingQuestionRef.current = null;
+        announcedTenSecondRef.current = null;
+        stopLoadingTone();
+
+        const readySequence = [preparingAudio, questionAudio].filter((audio): audio is TTSAudioPayload => Boolean(audio));
+        if (readySequence.length > 0) {
+          await playSequence(readySequence);
+        }
+      } finally {
+        if (!cancelled && questionRequestRef.current === requestId) {
+          stopLoadingTone();
+          setIsQuestionLoading(false);
+          pendingQuestionRef.current = null;
+        }
+      }
     })();
-  }, [activeTeamName, current?.question?.text, currentQuestionId, questionOptions, speak, visibleQuestionId]);
+
+    return () => {
+      cancelled = true;
+      stopLoadingTone();
+    };
+  }, [activeTeamName, current?.question?.text, currentQuestionId, playSequence, questionOptions, startLoadingTone, stopLoadingTone, visibleQuestionId]);
 
   const countdown = useMemo(() => {
     const startedAtMs = toEpochMs(current?.questionStartedAt);
@@ -337,7 +380,8 @@ export default function DisplayPage() {
         {!showQuestion || isQuestionLoading ? (
           <div className="w-full max-w-4xl rounded-3xl border border-slate-800 bg-slate-900/70 p-10 text-center animate-pulse">
             <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/80">Question Loading</p>
-            <h2 className="mt-5 text-4xl font-black lg:text-6xl">Please wait while AI host prepares the question…</h2>
+            <h2 className="mt-5 text-4xl font-black lg:text-6xl">Preparing your next question…</h2>
+            <p className="mt-4 text-lg text-slate-300">Gemini TTS is getting ready. Please enjoy the tune.</p>
           </div>
         ) : (
           <div className="w-full max-w-6xl rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-2xl animate-in fade-in zoom-in duration-500">
