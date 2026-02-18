@@ -7,10 +7,8 @@ import { useAudioController } from '@/src/hooks/useAudioController';
 import { getJson } from '@/src/lib/api/http';
 import { publicApi } from '@/src/lib/api/public';
 import { constructVerdict } from '@/src/lib/constants';
-import { getJson } from '@/src/lib/api/http';
 import { emitToast } from '@/src/lib/ui/toast';
 import { generateCommentary, getTTSAudio, type TTSAudioPayload } from '@/src/services/aiService';
-import { useEffect, useMemo, useRef, useState } from 'react';
 
 type QuizState = 'PREVIEW' | 'LIVE' | 'LOCKED' | 'REVEALED' | string;
 
@@ -120,12 +118,14 @@ export default function DisplayPage() {
     const pollCurrent = async () => {
       try {
         const response = await publicApi.getCurrent<CurrentResponse>(sessionId);
-        if (!isMounted) return;
+        if (!mounted) return;
 
         setCurrent(response);
+        setLastPollAt(Date.now());
+        setIsReconnecting(false);
         setError(null);
       } catch {
-        if (!isMounted) return;
+        if (!mounted) return;
 
         if (Date.now() - lastNetworkToastAtRef.current > 12_000) {
           lastNetworkToastAtRef.current = Date.now();
@@ -136,6 +136,7 @@ export default function DisplayPage() {
           });
         }
 
+        setIsReconnecting(true);
         setError('Live updates paused. Retrying now…');
       }
     };
@@ -174,24 +175,13 @@ export default function DisplayPage() {
   useEffect(() => {
     if (!sessionId || !showScoreboard) return;
 
-    void pollScoreboard();
-    const interval = window.setInterval(pollScoreboard, SCOREBOARD_POLL_MS);
-    return () => {
-      mounted = false;
-      window.clearInterval(interval);
-    };
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId || !showScoreboard) return;
-
     let mounted = true;
     const pollLeaderboard = async () => {
       try {
         const response = await publicApi.getLeaderboard<LeaderboardResponse>(sessionId);
-        if (isMounted) setLeaderboard(response.leaderboard ?? []);
+        if (mounted) setLeaderboard(response.leaderboard ?? []);
       } catch {
-        if (!isMounted) return;
+        if (!mounted) return;
         setLeaderboard([]);
       }
     };
@@ -229,24 +219,6 @@ export default function DisplayPage() {
 
     void (async () => {
       await speak(questionPrompt);
-      setVisibleQuestionId(currentQuestionId);
-      setIsQuestionLoading(false);
-      pendingQuestionRef.current = null;
-      announcedTenSecondRef.current = null;
-    })();
-  }, [activeTeamName, current?.question?.text, currentQuestionId, questionOptions, speak, visibleQuestionId]);
-
-  const countdown = useMemo(() => {
-    const startedAtMs = toEpochMs(current?.questionStartedAt);
-    const durationSec = current?.timerDurationSec;
-    if (!startedAtMs || !durationSec) return null;
-
-    const elapsedMs = (current?.serverNowEpochMs ?? tickNow) - startedAtMs;
-    return Math.max(0, Math.ceil(durationSec - elapsedMs / 1000));
-  }, [current?.questionStartedAt, current?.serverNowEpochMs, current?.timerDurationSec, tickNow]);
-
-    void (async () => {
-      await speak(message);
       setVisibleQuestionId(currentQuestionId);
       setIsQuestionLoading(false);
       pendingQuestionRef.current = null;
