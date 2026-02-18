@@ -18,7 +18,9 @@ type DisplayQuestion = {
   questionId?: string;
   text?: string;
   questionText?: string;
-  options?: Array<string | { key?: string; text?: string }> | Record<string, string>;
+  options?:
+    | Array<string | { key?: string; text?: string; label?: string; value?: string }>
+    | Record<string, string | { text?: string; label?: string; value?: string }>;
   correctOptionIndex?: number;
   correctAnswer?: string;
   correctKey?: string;
@@ -59,7 +61,11 @@ function normalizeDisplayOption(option: string | { key?: string; text?: string }
   if (option && typeof option === 'object') {
     return {
       key: (typeof option.key === 'string' && option.key.trim()) || String.fromCharCode(65 + index),
-      text: typeof option.text === 'string' ? option.text : '',
+      text:
+        (typeof option.text === 'string' && option.text) ||
+        (typeof option.label === 'string' && option.label) ||
+        (typeof option.value === 'string' && option.value) ||
+        '',
     };
   }
 
@@ -80,9 +86,22 @@ function normalizeOptions(options?: DisplayQuestion['options']) {
   }
 
   if (options && typeof options === 'object') {
-    return Object.entries(options).map(([key, text], index) =>
-      normalizeDisplayOption({ key, text: typeof text === 'string' ? text : '' }, index),
-    );
+    return Object.entries(options).map(([key, value], index) => {
+      if (typeof value === 'string') return normalizeDisplayOption({ key, text: value }, index);
+      if (value && typeof value === 'object') {
+        return normalizeDisplayOption(
+          {
+            key,
+            text: typeof value.text === 'string' ? value.text : undefined,
+            label: typeof value.label === 'string' ? value.label : undefined,
+            value: typeof value.value === 'string' ? value.value : undefined,
+          },
+          index,
+        );
+      }
+
+      return normalizeDisplayOption({ key, text: '' }, index);
+    });
   }
 
   return [];
@@ -93,13 +112,36 @@ function optionKeyToIndex(options: ReturnType<typeof normalizeOptions>, optionKe
   return options.findIndex((option) => option.key.toUpperCase() === optionKey.toUpperCase());
 }
 
+function resolveActiveQuestion(current: CurrentResponse | null): DisplayQuestion | undefined {
+  if (!current) return undefined;
+
+  const response = current as CurrentResponse & {
+    current?: DisplayQuestion;
+    current_question?: DisplayQuestion;
+    data?: {
+      question?: DisplayQuestion;
+      currentQuestion?: DisplayQuestion;
+      current?: DisplayQuestion;
+    };
+  };
+
+  return (
+    response.question ??
+    response.currentQuestion ??
+    response.current ??
+    response.current_question ??
+    response.data?.question ??
+    response.data?.currentQuestion ??
+    response.data?.current
+  );
+}
+
 export default function DisplayPage() {
   const [sessionId, setSessionId] = useState('');
   const [current, setCurrent] = useState<CurrentResponse | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [isQuestionLoading, setIsQuestionLoading] = useState(false);
-  const [visibleQuestionId, setVisibleQuestionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tickNow, setTickNow] = useState(() => Date.now());
   const [lastPollAt, setLastPollAt] = useState<number | null>(null);
@@ -233,7 +275,7 @@ export default function DisplayPage() {
     void speak('Welcome to Digital University Quiz. Let us start!');
   }, [speak]);
 
-  const activeQuestion = current?.question ?? current?.currentQuestion;
+  const activeQuestion = resolveActiveQuestion(current);
   const state = current?.state ?? current?.session?.state ?? 'PREVIEW';
   const activeTeamName = current?.activeTeamName ?? 'Team';
   const questionOptions = normalizeOptions(activeQuestion?.options);
@@ -247,7 +289,7 @@ export default function DisplayPage() {
 
   useEffect(() => {
     if (!currentQuestionId || !questionText || questionOptions.length === 0) return;
-    if (pendingQuestionRef.current === currentQuestionId || visibleQuestionId === currentQuestionId) return;
+    if (pendingQuestionRef.current === currentQuestionId) return;
 
     questionRequestRef.current += 1;
     const requestId = questionRequestRef.current;
@@ -281,7 +323,6 @@ export default function DisplayPage() {
 
         if (cancelled || questionRequestRef.current !== requestId) return;
 
-        setVisibleQuestionId(currentQuestionId);
         setIsQuestionLoading(false);
         pendingQuestionRef.current = null;
         announcedTenSecondRef.current = null;
@@ -304,7 +345,7 @@ export default function DisplayPage() {
       cancelled = true;
       stopLoadingTone();
     };
-  }, [activeTeamName, currentQuestionId, playSequence, questionOptions, questionText, startLoadingTone, stopLoadingTone, visibleQuestionId]);
+  }, [activeTeamName, currentQuestionId, playSequence, questionOptions, questionText, startLoadingTone, stopLoadingTone]);
 
   const countdown = useMemo(() => {
     const startedAtMs = toEpochMs(current?.questionStartedAt);
@@ -352,28 +393,28 @@ export default function DisplayPage() {
 
   if (showScoreboard) {
     return (
-      <section className="fixed inset-0 overflow-y-auto bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-900 p-8 text-blue-50 lg:p-14">
+      <section className="fixed inset-0 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.2),transparent_45%),radial-gradient(circle_at_85%_85%,rgba(139,92,246,0.2),transparent_40%),linear-gradient(140deg,#020617,#0b1120,#172554)] p-8 text-slate-100 lg:p-14">
         <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col gap-8">
-          <header className="rounded-3xl border border-blue-300/25 bg-blue-900/30 p-8 backdrop-blur">
-            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/80">Digital University Quiz</p>
+          <header className="rounded-[2rem] border border-cyan-200/30 bg-white/5 p-8 shadow-[0_0_60px_rgba(14,165,233,0.13)] backdrop-blur-xl">
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/90">Digital University Quiz</p>
             <h1 className="mt-3 text-5xl font-black tracking-tight lg:text-7xl">Live Scoreboard</h1>
             <div className="mt-5 flex flex-wrap gap-3 text-sm">
-              <span className="rounded-full border border-cyan-200/30 bg-cyan-500/10 px-4 py-1.5">Session: {sessionId || '—'}</span>
-              <span className="rounded-full border border-blue-200/30 bg-blue-500/10 px-4 py-1.5">{leaderboard.length} Teams</span>
-              <span className="rounded-full border border-indigo-200/30 bg-indigo-500/10 px-4 py-1.5">{leaderboardTotalScore} Total Points</span>
+              <span className="rounded-full border border-cyan-100/35 bg-cyan-400/12 px-4 py-1.5">Session: {sessionId || '—'}</span>
+              <span className="rounded-full border border-blue-100/35 bg-blue-400/12 px-4 py-1.5">{leaderboard.length} Teams</span>
+              <span className="rounded-full border border-violet-100/35 bg-violet-400/12 px-4 py-1.5">{leaderboardTotalScore} Total Points</span>
             </div>
           </header>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-blue-300/20 bg-blue-900/35 p-5">
+            <div className="rounded-2xl border border-cyan-200/25 bg-white/5 p-5 backdrop-blur">
               <p className="text-xs uppercase tracking-[0.2em] text-blue-200/70">Current Question State</p>
               <p className="mt-2 text-3xl font-extrabold">{state}</p>
             </div>
-            <div className="rounded-2xl border border-cyan-300/20 bg-blue-900/35 p-5">
+            <div className="rounded-2xl border border-cyan-200/25 bg-white/5 p-5 backdrop-blur">
               <p className="text-xs uppercase tracking-[0.2em] text-blue-200/70">Now Answering</p>
               <p className="mt-2 text-3xl font-extrabold">{activeTeamName}</p>
             </div>
-            <div className="rounded-2xl border border-indigo-300/20 bg-blue-900/35 p-5">
+            <div className="rounded-2xl border border-cyan-200/25 bg-white/5 p-5 backdrop-blur">
               <p className="text-xs uppercase tracking-[0.2em] text-blue-200/70">Sync</p>
               <p className="mt-2 text-lg font-semibold">{isReconnecting ? 'Reconnecting…' : `Online • ${pollStatus}`}</p>
             </div>
@@ -385,8 +426,8 @@ export default function DisplayPage() {
                 key={`${entry.teamName}-${index}`}
                 className={`flex items-center justify-between rounded-2xl border px-6 py-4 text-2xl ${
                   index === 0
-                    ? 'border-cyan-300/70 bg-cyan-400/20 text-cyan-50 shadow-[0_0_40px_rgba(34,211,238,0.25)]'
-                    : 'border-blue-200/25 bg-blue-900/25'
+                    ? 'border-cyan-300/70 bg-cyan-400/20 text-cyan-50 shadow-[0_0_45px_rgba(34,211,238,0.28)]'
+                    : 'border-cyan-100/20 bg-white/5 backdrop-blur'
                 }`}
               >
                 <span className="font-bold">#{index + 1} {entry.teamName ?? 'Unknown team'}</span>
@@ -394,7 +435,7 @@ export default function DisplayPage() {
               </li>
             ))}
             {leaderboard.length === 0 && (
-              <li className="rounded-2xl border border-blue-200/20 bg-blue-900/20 px-6 py-5 text-blue-100/75">No leaderboard data yet.</li>
+              <li className="rounded-2xl border border-cyan-100/20 bg-white/5 px-6 py-5 text-blue-100/75">No leaderboard data yet.</li>
             )}
           </ol>
         </div>
@@ -402,32 +443,36 @@ export default function DisplayPage() {
     );
   }
 
-  const showQuestion = Boolean(visibleQuestionId && visibleQuestionId === currentQuestionId);
+  const showQuestion = Boolean(currentQuestionId && questionText && questionOptions.length > 0);
   const shouldShowTimer = state === 'LIVE' && showQuestion;
 
   return (
-    <section className="fixed inset-0 overflow-y-auto bg-slate-950 p-8 text-slate-100 lg:p-14">
+    <section className="fixed inset-0 overflow-y-auto bg-[radial-gradient(circle_at_20%_5%,rgba(56,189,248,0.2),transparent_35%),radial-gradient(circle_at_80%_90%,rgba(139,92,246,0.2),transparent_38%),linear-gradient(160deg,#020617,#0b1120,#1e1b4b)] p-8 text-slate-100 lg:p-14">
       <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col items-center justify-center gap-8">
         <div className="w-full max-w-md">
           <AIHostAvatar isSpeaking={isSpeaking} size="h-[22rem] w-full" />
-          <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
+          <p className="mt-3 text-center text-sm font-medium tracking-wide text-cyan-200/90">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
         </div>
 
-        {!showQuestion || isQuestionLoading ? (
-          <div className="w-full max-w-4xl rounded-3xl border border-slate-800 bg-slate-900/70 p-10 text-center animate-pulse">
+        {!showQuestion ? (
+          <div className="w-full max-w-4xl animate-pulse rounded-[2rem] border border-cyan-100/20 bg-white/5 p-10 text-center shadow-[0_0_45px_rgba(14,165,233,0.18)] backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/80">Question Loading</p>
             <h2 className="mt-5 text-4xl font-black lg:text-6xl">Preparing your next question…</h2>
-            <p className="mt-4 text-lg text-slate-300">Gemini TTS is getting ready. Please enjoy the tune.</p>
+            <p className="mt-4 text-lg text-slate-300">Waiting for the next question data…</p>
           </div>
         ) : (
-          <div className="w-full max-w-6xl rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-2xl animate-in fade-in zoom-in duration-500">
+          <div className="w-full max-w-6xl animate-in fade-in zoom-in rounded-[2rem] border border-cyan-100/20 bg-white/5 p-8 shadow-[0_0_55px_rgba(14,165,233,0.16)] backdrop-blur-xl duration-500">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-              <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-5 py-2 text-sm font-bold uppercase tracking-wider text-blue-200">{state}</span>
-              <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-5 py-2 text-sm font-semibold text-purple-200">Answering Team: {activeTeamName}</span>
+              <span className="rounded-full border border-cyan-200/40 bg-cyan-500/10 px-5 py-2 text-sm font-bold uppercase tracking-wider text-cyan-100">{state}</span>
+              <span className="rounded-full border border-violet-300/40 bg-violet-500/10 px-5 py-2 text-sm font-semibold text-violet-100">Answering Team: {activeTeamName}</span>
               {shouldShowTimer && (
-                <span className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-2 text-2xl font-black tabular-nums text-emerald-300">{countdown === null ? '—' : `${countdown}s`}</span>
+                <span className="rounded-xl border border-emerald-300/45 bg-emerald-500/10 px-5 py-2 text-2xl font-black tabular-nums text-emerald-200">{countdown === null ? '—' : `${countdown}s`}</span>
               )}
             </div>
+
+            {isQuestionLoading && (
+              <p className="mb-3 text-sm text-cyan-200/85">AI host is reading the question…</p>
+            )}
 
             <h2 className="text-4xl font-bold leading-tight lg:text-6xl">{questionText ?? 'Waiting for question...'}</h2>
 
@@ -440,7 +485,7 @@ export default function DisplayPage() {
                     className={`rounded-xl border px-5 py-4 text-2xl font-semibold transition-all duration-300 lg:text-3xl ${
                       isCorrect
                         ? 'border-emerald-300 bg-emerald-400/20 text-emerald-100'
-                        : 'border-slate-700 bg-slate-800/70 text-slate-100'
+                        : 'border-cyan-100/20 bg-slate-900/55 text-slate-100'
                     }`}
                   >
                     <span className="mr-3 text-slate-400">{option.key}.</span>

@@ -90,12 +90,21 @@ function NeuralCore({ isSpeaking }: { isSpeaking: boolean }) {
 
 export default function AIHostAvatar({ isSpeaking, size = 'h-72 w-72' }: AIHostAvatarProps) {
   return (
-    <div className={`${size} overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-950/70 shadow-[0_0_35px_rgba(34,211,238,0.25)]`}>
+    <div
+      className={`${size} relative overflow-hidden rounded-[2rem] border border-cyan-300/35 bg-[radial-gradient(circle_at_35%_20%,rgba(103,232,249,0.28),transparent_52%),radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.2),transparent_50%),rgba(2,6,23,0.92)] shadow-[0_0_65px_rgba(6,182,212,0.24)]`}
+    >
+      <div className="pointer-events-none absolute inset-0 z-10 rounded-[2rem] border border-white/10" />
+      <div
+        className={`pointer-events-none absolute -inset-16 rounded-full blur-3xl transition-opacity duration-500 ${
+          isSpeaking ? 'bg-cyan-400/30 opacity-100' : 'bg-violet-400/20 opacity-70'
+        }`}
+      />
+
       <Canvas camera={{ position: [0, 0, 4], fov: 55 }}>
-        <ambientLight intensity={0.5} />
-        <pointLight position={[3, 3, 5]} intensity={1.1} color="#7dd3fc" />
-        <pointLight position={[-4, -2, -2]} intensity={0.9} color="#8b5cf6" />
-        <Stars radius={60} depth={45} count={2500} factor={3} saturation={0} fade speed={1.2} />
+        <ambientLight intensity={0.55} />
+        <pointLight position={[3, 3, 5]} intensity={1.2} color="#7dd3fc" />
+        <pointLight position={[-4, -2, -2]} intensity={0.95} color="#8b5cf6" />
+        <Stars radius={60} depth={45} count={3000} factor={3} saturation={0} fade speed={1.2} />
         <NeuralCore isSpeaking={isSpeaking} />
       </Canvas>
     </div>
