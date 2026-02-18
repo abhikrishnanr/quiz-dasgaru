@@ -7,6 +7,7 @@ import { useAudioController } from '@/src/hooks/useAudioController';
 import { getJson } from '@/src/lib/api/http';
 import { publicApi } from '@/src/lib/api/public';
 import { constructVerdict } from '@/src/lib/constants';
+import { normalizeSessionId } from '@/src/lib/session-id';
 import { emitToast } from '@/src/lib/ui/toast';
 import { generateCommentary, getTTSAudio, type TTSAudioPayload } from '@/src/services/aiService';
 
@@ -84,7 +85,7 @@ export default function DisplayPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setSessionId(params.get('sessionId')?.trim() ?? '');
+    setSessionId(normalizeSessionId(params.get('sessionId')));
   }, []);
 
   useEffect(() => {

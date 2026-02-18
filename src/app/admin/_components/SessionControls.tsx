@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from "react";
 import { AdminSessionDetails, AnswerRecord } from "../types";
 import { postJson, getJson } from "@/src/lib/api/http";
 import { emitToast } from "@/src/lib/ui/toast";
-import { generateDisplayToken } from "@/src/lib/security";
 
 interface SessionControlsProps {
     sessionId: string;
@@ -109,9 +108,8 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
     };
 
     const handleCopyDisplayLink = async () => {
-        const token = generateDisplayToken(sessionId);
-        const url = `${window.location.origin}/display/${sessionId}__${token}`;
-        navigator.clipboard.writeText(url);
+        const url = `${window.location.origin}/display?sessionId=${encodeURIComponent(sessionId)}`;
+        await navigator.clipboard.writeText(url);
         emitToast({ level: 'success', title: 'Copied', message: 'Display Dashboard link copied!' });
     };
 
