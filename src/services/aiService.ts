@@ -8,6 +8,11 @@ const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
 
+export type TTSAudioPayload = {
+  data: string;
+  mimeType?: string;
+};
+
 const inMemoryTTSCache = new Map<string, string>();
 const aiClient = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
@@ -53,34 +58,43 @@ function writeToLocalStorageCache(text: string, audioBase64: string): void {
   }
 }
 
-function extractAudioData(response: unknown): string | undefined {
+function extractAudioData(response: unknown): TTSAudioPayload | undefined {
   if (!response || typeof response !== 'object') {
     return undefined;
   }
 
   const typedResponse = response as {
-    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string } }> } }>;
+    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
   };
 
-  return typedResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  const inlineData = typedResponse.candidates?.[0]?.content?.parts?.find((part) => part?.inlineData?.data)?.inlineData;
+  if (!inlineData?.data) {
+    return undefined;
+  }
+
+  return {
+    data: inlineData.data,
+    mimeType: inlineData.mimeType,
+  };
 }
 
-export async function getTTSAudio(text: string): Promise<string | undefined> {
+export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undefined> {
   if (!text.trim()) {
     logGeminiInfo('TTS skipped because text is empty.');
     return undefined;
   }
 
-  if (inMemoryTTSCache.has(text)) {
+  const cachedAudio = inMemoryTTSCache.get(text);
+  if (cachedAudio) {
     logGeminiInfo('TTS cache hit (memory).', { textPreview: text.slice(0, 80) });
-    return inMemoryTTSCache.get(text);
+    return { data: cachedAudio };
   }
 
   const localCached = readFromLocalStorageCache(text);
   if (localCached) {
     logGeminiInfo('TTS cache hit (localStorage).', { textPreview: text.slice(0, 80) });
     inMemoryTTSCache.set(text, localCached);
-    return localCached;
+    return { data: localCached };
   }
 
   if (!aiClient) {
@@ -110,8 +124,8 @@ export async function getTTSAudio(text: string): Promise<string | undefined> {
       },
     });
 
-    const audioBase64 = extractAudioData(response);
-    if (!audioBase64) {
+    const audioPayload = extractAudioData(response);
+    if (!audioPayload?.data) {
       logGeminiError('TTS response failed: no audio content in Gemini response.', {
         model: TTS_MODEL,
         status: 'fail',
@@ -123,13 +137,14 @@ export async function getTTSAudio(text: string): Promise<string | undefined> {
     logGeminiInfo('TTS response success.', {
       model: TTS_MODEL,
       status: 'pass',
-      audioBytesBase64Length: audioBase64.length,
+      audioBytesBase64Length: audioPayload.data.length,
+      mimeType: audioPayload.mimeType,
       textPreview: text.slice(0, 120),
     });
 
-    inMemoryTTSCache.set(text, audioBase64);
-    writeToLocalStorageCache(text, audioBase64);
-    return audioBase64;
+    inMemoryTTSCache.set(text, audioPayload.data);
+    writeToLocalStorageCache(text, audioPayload.data);
+    return audioPayload;
   } catch (error) {
     logGeminiError('TTS request failed.', {
       model: TTS_MODEL,

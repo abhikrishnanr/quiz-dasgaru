@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getTTSAudio } from '@/src/services/aiService';
+import { getTTSAudio, type TTSAudioPayload } from '@/src/services/aiService';
 
 let sharedAudioContext: AudioContext | null = null;
 
@@ -31,6 +31,32 @@ function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
   }
 
   return bytes.buffer;
+}
+
+function decodePCM16ToAudioBuffer(context: AudioContext, pcmBuffer: ArrayBuffer, sampleRate: number): AudioBuffer {
+  const int16 = new Int16Array(pcmBuffer);
+  const audioBuffer = context.createBuffer(1, int16.length, sampleRate);
+  const channelData = audioBuffer.getChannelData(0);
+
+  for (let i = 0; i < int16.length; i += 1) {
+    channelData[i] = int16[i] / 32768;
+  }
+
+  return audioBuffer;
+}
+
+function parseSampleRateFromMimeType(mimeType?: string): number | undefined {
+  if (!mimeType) {
+    return undefined;
+  }
+
+  const sampleRateMatch = mimeType.match(/rate=(\d+)/i);
+  if (!sampleRateMatch?.[1]) {
+    return undefined;
+  }
+
+  const sampleRate = Number.parseInt(sampleRateMatch[1], 10);
+  return Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : undefined;
 }
 
 async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Promise<void> {
@@ -78,14 +104,20 @@ export function useAudioController() {
     };
   }, []);
 
-  const decodeAudio = useCallback(async (audioBase64: string): Promise<AudioBuffer | undefined> => {
+  const decodeAudio = useCallback(async (audio: TTSAudioPayload): Promise<AudioBuffer | undefined> => {
     try {
       const context = ensureAudioContext();
       if (!context) {
         return undefined;
       }
 
-      const arrayBuffer = decodeBase64ToArrayBuffer(audioBase64);
+      const arrayBuffer = decodeBase64ToArrayBuffer(audio.data);
+      const mimeType = audio.mimeType?.toLowerCase();
+      if (mimeType?.includes('audio/l16') || mimeType?.includes('audio/pcm')) {
+        const sampleRate = parseSampleRateFromMimeType(mimeType) ?? 24000;
+        return decodePCM16ToAudioBuffer(context, arrayBuffer, sampleRate);
+      }
+
       return await context.decodeAudioData(arrayBuffer.slice(0));
     } catch {
       return undefined;
@@ -93,14 +125,18 @@ export function useAudioController() {
   }, []);
 
   const playSequence = useCallback(
-    async (audios: string[]) => {
+    async (audios: TTSAudioPayload[]) => {
       const context = ensureAudioContext();
       if (!context) {
         return;
       }
 
       if (context.state === 'suspended') {
-        await context.resume();
+        try {
+          await context.resume();
+        } catch {
+          return;
+        }
       }
 
       setIsSpeaking(true);

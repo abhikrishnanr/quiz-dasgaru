@@ -4,7 +4,7 @@ import AIHostAvatar from '@/src/components/AIHostAvatar';
 import { useAudioController } from '@/src/hooks/useAudioController';
 import { publicApi } from '@/src/lib/api/public';
 import { constructVerdict, HOST_SCRIPTS } from '@/src/lib/constants';
-import { generateCommentary, getTTSAudio } from '@/src/services/aiService';
+import { generateCommentary, getTTSAudio, type TTSAudioPayload } from '@/src/services/aiService';
 import { emitToast } from '@/src/lib/ui/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -264,7 +264,7 @@ export default function DisplayPage() {
         wittyComment ? getTTSAudio(wittyComment) : Promise.resolve(undefined),
       ]);
 
-      await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is string => Boolean(audio)));
+      await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is TTSAudioPayload => Boolean(audio)));
     })();
   }, [activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, questionOptions, state]);
 
