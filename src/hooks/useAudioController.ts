@@ -119,27 +119,34 @@ export function useAudioController() {
       }
 
       return await context.decodeAudioData(arrayBuffer.slice(0));
-    } catch {
+    } catch (error) {
+      console.error('[AudioController] Failed to decode TTS audio payload.', {
+        mimeType: audio.mimeType,
+        error,
+      });
       return undefined;
     }
   }, []);
 
   const playSequence = useCallback(
-    async (audios: TTSAudioPayload[]) => {
+    async (audios: TTSAudioPayload[]): Promise<boolean> => {
       const context = ensureAudioContext();
       if (!context) {
-        return;
+        console.warn('[AudioController] No browser AudioContext available.');
+        return false;
       }
 
       if (context.state === 'suspended') {
         try {
           await context.resume();
         } catch {
-          return;
+          console.warn('[AudioController] Unable to resume suspended AudioContext.');
+          return false;
         }
       }
 
       setIsSpeaking(true);
+      let playedCount = 0;
 
       try {
         for (let index = 0; index < audios.length; index += 1) {
@@ -150,10 +157,14 @@ export function useAudioController() {
 
           const buffer = await decodeAudio(audio);
           if (!buffer) {
+            console.warn('[AudioController] Skipping TTS playback due to decode failure.', {
+              mimeType: audio.mimeType,
+            });
             continue;
           }
 
           await playAudioBuffer(context, buffer);
+          playedCount += 1;
           if (index < audios.length - 1) {
             await new Promise((resolve) => window.setTimeout(resolve, 300));
           }
@@ -161,17 +172,19 @@ export function useAudioController() {
       } finally {
         setIsSpeaking(false);
       }
+
+      return playedCount > 0;
     },
     [decodeAudio],
   );
 
   const speak = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<boolean> => {
       const audio = await getTTSAudio(text);
       if (!audio) {
-        return;
+        return false;
       }
-      await playSequence([audio]);
+      return playSequence([audio]);
     },
     [playSequence],
   );

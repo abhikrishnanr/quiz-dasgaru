@@ -13,6 +13,7 @@ export default function DisplayPage() {
     const [error, setError] = useState('');
     const [errorPayload, setErrorPayload] = useState<any>(null);
     const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
+    const [isTestAudioRunning, setIsTestAudioRunning] = useState(false);
     const { speak } = useAudioController();
 
     useEffect(() => {
@@ -83,8 +84,23 @@ export default function DisplayPage() {
         const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
         setLastAnnouncedQuestionKey(questionKey);
-        void speak(message);
+        void speak(message).then((played) => {
+            console.info('[Display TTS] Auto announcement played:', played);
+        });
     }, [currentQuestion, duration, lastAnnouncedQuestionKey, session, speak]);
+
+    const runTestAudio = async () => {
+        const sampleText = 'Audio test sample. If you can hear this, TTS playback is working on the display page.';
+        setIsTestAudioRunning(true);
+        try {
+            const played = await speak(sampleText);
+            console.info('[Display TTS] Sample test button result:', played);
+        } catch (error) {
+            console.error('[Display TTS] Sample test button failed:', error);
+        } finally {
+            setIsTestAudioRunning(false);
+        }
+    };
 
     if (loading && !data && !error) {
         return (
@@ -168,7 +184,15 @@ export default function DisplayPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-4">
+                        <button
+                            type="button"
+                            onClick={runTestAudio}
+                            disabled={isTestAudioRunning}
+                            className="px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 font-black uppercase text-[11px] tracking-widest hover:bg-amber-500/25 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                        >
+                            {isTestAudioRunning ? 'Testing Audio…' : 'Test Sample Audio'}
+                        </button>
                         {isLive && (
                             <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
                                 <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
