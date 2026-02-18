@@ -85,14 +85,34 @@ async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Prom
 
 export function useAudioController() {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const initializedRef = useRef(false);
+  const hasUserGestureRef = useRef(false);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || initializedRef.current) {
+  const waitForUserGesture = useCallback(async (): Promise<void> => {
+    if (typeof window === 'undefined' || hasUserGestureRef.current) {
       return;
     }
 
-    const unlockAudio = async () => {
+    await new Promise<void>((resolve) => {
+      const handler = () => {
+        hasUserGestureRef.current = true;
+        window.removeEventListener('pointerdown', handler);
+        window.removeEventListener('keydown', handler);
+        resolve();
+      };
+
+      window.addEventListener('pointerdown', handler, { once: true });
+      window.addEventListener('keydown', handler, { once: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const markGestureAndUnlockAudio = async () => {
+      hasUserGestureRef.current = true;
+
       const context = ensureAudioContext();
       if (!context) {
         return;
@@ -103,10 +123,7 @@ export function useAudioController() {
     };
 
     const handler = () => {
-      void unlockAudio();
-      initializedRef.current = true;
-      window.removeEventListener('pointerdown', handler);
-      window.removeEventListener('keydown', handler);
+      void markGestureAndUnlockAudio();
     };
 
     window.addEventListener('pointerdown', handler, { once: true });
@@ -158,6 +175,10 @@ export function useAudioController() {
 
   const playSequence = useCallback(
     async (audios: TTSAudioPayload[]): Promise<boolean> => {
+      if (!hasUserGestureRef.current) {
+        await waitForUserGesture();
+      }
+
       const context = ensureAudioContext();
       if (!context) {
         console.warn('[AudioController] No browser AudioContext available.');
@@ -203,7 +224,7 @@ export function useAudioController() {
 
       return playedCount > 0;
     },
-    [decodeAudio],
+    [decodeAudio, waitForUserGesture],
   );
 
   const speak = useCallback(
