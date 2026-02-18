@@ -13,7 +13,7 @@ export type TTSAudioPayload = {
   mimeType?: string;
 };
 
-const inMemoryTTSCache = new Map<string, string>();
+const inMemoryTTSCache = new Map<string, TTSAudioPayload>();
 const aiClient = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
 function logGeminiInfo(message: string, payload?: unknown): void {
@@ -34,25 +34,42 @@ function logGeminiError(message: string, payload?: unknown): void {
   console.error(`${GEMINI_LOG_PREFIX} ${message}`, payload);
 }
 
-function readFromLocalStorageCache(text: string): string | undefined {
+function readFromLocalStorageCache(text: string): TTSAudioPayload | undefined {
   if (typeof window === 'undefined') {
     return undefined;
   }
 
   try {
-    return window.localStorage.getItem(`${CACHE_PREFIX}${text}`) ?? undefined;
+    const cached = window.localStorage.getItem(`${CACHE_PREFIX}${text}`);
+    if (!cached) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(cached) as TTSAudioPayload;
+      if (parsed?.data && typeof parsed.data === 'string') {
+        return {
+          data: parsed.data,
+          mimeType: parsed.mimeType,
+        };
+      }
+    } catch {
+      // backwards compatibility: older cache entries stored only base64 string
+    }
+
+    return { data: cached };
   } catch {
     return undefined;
   }
 }
 
-function writeToLocalStorageCache(text: string, audioBase64: string): void {
+function writeToLocalStorageCache(text: string, payload: TTSAudioPayload): void {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.setItem(`${CACHE_PREFIX}${text}`, audioBase64);
+    window.localStorage.setItem(`${CACHE_PREFIX}${text}`, JSON.stringify(payload));
   } catch {
     // no-op if storage is unavailable or full
   }
@@ -85,16 +102,16 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
   }
 
   const cachedAudio = inMemoryTTSCache.get(text);
-  if (cachedAudio) {
+  if (cachedAudio?.data) {
     logGeminiInfo('TTS cache hit (memory).', { textPreview: text.slice(0, 80) });
-    return { data: cachedAudio };
+    return cachedAudio;
   }
 
   const localCached = readFromLocalStorageCache(text);
-  if (localCached) {
+  if (localCached?.data) {
     logGeminiInfo('TTS cache hit (localStorage).', { textPreview: text.slice(0, 80) });
     inMemoryTTSCache.set(text, localCached);
-    return { data: localCached };
+    return localCached;
   }
 
   if (!aiClient) {
@@ -142,8 +159,8 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
       textPreview: text.slice(0, 120),
     });
 
-    inMemoryTTSCache.set(text, audioPayload.data);
-    writeToLocalStorageCache(text, audioPayload.data);
+    inMemoryTTSCache.set(text, audioPayload);
+    writeToLocalStorageCache(text, audioPayload);
     return audioPayload;
   } catch (error) {
     logGeminiError('TTS request failed.', {
