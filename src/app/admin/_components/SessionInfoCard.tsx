@@ -1,8 +1,6 @@
 'use client';
 
 import { AdminSessionDetails } from "../types";
-import { useState } from 'react';
-import { postJson, getJson } from "@/src/lib/api/http";
 import { emitToast } from "@/src/lib/ui/toast";
 
 interface SessionInfoCardProps {
@@ -11,28 +9,10 @@ interface SessionInfoCardProps {
 }
 
 export function SessionInfoCard({ session, stats }: SessionInfoCardProps) {
-    const [generatingLink, setGeneratingLink] = useState(false);
-
     const handleCopyDisplayLink = async () => {
-        let token = session.displayToken;
-        if (!token) {
-            setGeneratingLink(true);
-            try {
-                // Fetch stateless token from new API
-                const res = await getJson<{ token: string }>(`/api/admin/session/${session.sessionId}/token`);
-                token = res.token;
-            } catch (error) {
-                console.error("Failed to generate token", error);
-                emitToast({ level: 'error', title: 'Error', message: 'Failed to generate link' });
-                setGeneratingLink(false);
-                return;
-            }
-            setGeneratingLink(false);
-        }
-
-        const url = `${window.location.origin}/display/${session.sessionId}__${token}`;
-        navigator.clipboard.writeText(url);
-        emitToast({ level: 'success', title: 'Copied', message: 'Leaderboard link copied!' });
+        const url = `${window.location.origin}/display?sessionId=${encodeURIComponent(session.sessionId)}`;
+        await navigator.clipboard.writeText(url);
+        emitToast({ level: 'success', title: 'Copied', message: 'Display link copied!' });
     };
 
     return (
@@ -56,11 +36,10 @@ export function SessionInfoCard({ session, stats }: SessionInfoCardProps) {
 
                     <button
                         onClick={handleCopyDisplayLink}
-                        disabled={generatingLink}
                         className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors flex items-center gap-1 border border-indigo-100 shadow-sm"
                         title="Open public scoreboard"
                     >
-                        {generatingLink ? 'Wait...' : '📺 DISPLAY BOARD'}
+                        📺 DISPLAY BOARD
                     </button>
                 </div>
             </div>
