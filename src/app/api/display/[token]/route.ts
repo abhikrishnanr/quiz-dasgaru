@@ -170,7 +170,9 @@ export async function GET(
                 questionState: questionState,
                 timerDurationSec: sessionData.session.timerDurationSec,
                 questionStartedAt: sessionData.session.questionStartedAt,
-                gameMode: sessionData.session.gameMode
+                gameMode: sessionData.session.gameMode,
+                concernTeamId: sessionData.session.concernTeamId,
+                concernTeamName: teamScores[sessionData.session.concernTeamId]?.name || null,
             },
             currentQuestion: sanitizedQuestion,
             recentAnswers: recentAnswers,
