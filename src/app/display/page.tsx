@@ -13,16 +13,27 @@ import { generateCommentary, getTTSAudio, type TTSAudioPayload } from '@/src/ser
 
 type QuizState = 'PREVIEW' | 'LIVE' | 'LOCKED' | 'REVEALED' | string;
 
+type DisplayQuestion = {
+  id?: string;
+  questionId?: string;
+  text?: string;
+  questionText?: string;
+  options?: Array<string | { key?: string; text?: string }> | Record<string, string>;
+  correctOptionIndex?: number;
+  correctAnswer?: string;
+  correctKey?: string;
+};
+
 type CurrentResponse = {
   state?: QuizState;
+  session?: {
+    state?: QuizState;
+  };
   activeTeamName?: string;
   selectedOptionIndex?: number;
-  question?: {
-    id?: string;
-    text?: string;
-    options?: Array<string | { key?: string; text?: string }>;
-    correctOptionIndex?: number;
-  };
+  selectedKey?: string;
+  question?: DisplayQuestion;
+  currentQuestion?: DisplayQuestion;
   questionStartedAt?: string | number;
   timerDurationSec?: number;
   serverNowEpochMs?: number;
@@ -61,6 +72,25 @@ function toEpochMs(value?: string | number): number | null {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function normalizeOptions(options?: DisplayQuestion['options']) {
+  if (Array.isArray(options)) {
+    return options.map((option, index) => normalizeDisplayOption(option, index));
+  }
+
+  if (options && typeof options === 'object') {
+    return Object.entries(options).map(([key, text], index) =>
+      normalizeDisplayOption({ key, text: typeof text === 'string' ? text : '' }, index),
+    );
+  }
+
+  return [];
+}
+
+function optionKeyToIndex(options: ReturnType<typeof normalizeOptions>, optionKey?: string) {
+  if (!optionKey) return undefined;
+  return options.findIndex((option) => option.key.toUpperCase() === optionKey.toUpperCase());
 }
 
 export default function DisplayPage() {
@@ -203,14 +233,20 @@ export default function DisplayPage() {
     void speak('Welcome to Digital University Quiz. Let us start!');
   }, [speak]);
 
-  const state = current?.state ?? 'PREVIEW';
+  const activeQuestion = current?.question ?? current?.currentQuestion;
+  const state = current?.state ?? current?.session?.state ?? 'PREVIEW';
   const activeTeamName = current?.activeTeamName ?? 'Team';
-  const questionOptions = (current?.question?.options ?? []).map((option, index) => normalizeDisplayOption(option, index));
-  const currentQuestionId = current?.question?.id ?? (current?.question?.text ? `${current.question.text}-${questionOptions.map((option) => option.text).join('|')}` : null);
-  const correctOptionIndex = current?.question?.correctOptionIndex;
+  const questionOptions = normalizeOptions(activeQuestion?.options);
+  const questionText = activeQuestion?.text ?? activeQuestion?.questionText;
+  const currentQuestionId = activeQuestion?.id ?? activeQuestion?.questionId ?? (questionText ? `${questionText}-${questionOptions.map((option) => option.text).join('|')}` : null);
+  const correctOptionIndex =
+    activeQuestion?.correctOptionIndex ??
+    optionKeyToIndex(questionOptions, activeQuestion?.correctAnswer ?? activeQuestion?.correctKey);
+  const selectedOptionIndex =
+    current?.selectedOptionIndex ?? optionKeyToIndex(questionOptions, current?.selectedKey);
 
   useEffect(() => {
-    if (!currentQuestionId || !current?.question?.text || questionOptions.length === 0) return;
+    if (!currentQuestionId || !questionText || questionOptions.length === 0) return;
     if (pendingQuestionRef.current === currentQuestionId || visibleQuestionId === currentQuestionId) return;
 
     questionRequestRef.current += 1;
@@ -221,7 +257,7 @@ export default function DisplayPage() {
     setIsQuestionLoading(true);
 
     const optionsText = questionOptions.map((option) => `${option.key}. ${option.text}`).join('. ');
-    const questionPrompt = `Question for ${activeTeamName}. ${current.question.text}. Options are ${optionsText}.`;
+    const questionPrompt = `Question for ${activeTeamName}. ${questionText}. Options are ${optionsText}.`;
     const loadingAnnouncement = 'Preparing your next question. Please get ready.';
     const audioReadyTimeoutMs = 9_000;
 
@@ -268,7 +304,7 @@ export default function DisplayPage() {
       cancelled = true;
       stopLoadingTone();
     };
-  }, [activeTeamName, current?.question?.text, currentQuestionId, playSequence, questionOptions, startLoadingTone, stopLoadingTone, visibleQuestionId]);
+  }, [activeTeamName, currentQuestionId, playSequence, questionOptions, questionText, startLoadingTone, stopLoadingTone, visibleQuestionId]);
 
   const countdown = useMemo(() => {
     const startedAtMs = toEpochMs(current?.questionStartedAt);
@@ -282,13 +318,13 @@ export default function DisplayPage() {
   useEffect(() => {
     if (state !== 'REVEALED' || correctOptionIndex === undefined) return;
 
-    const resultSignature = `${currentQuestionId}-${correctOptionIndex}-${current?.selectedOptionIndex ?? 'NA'}`;
+    const resultSignature = `${currentQuestionId}-${correctOptionIndex}-${selectedOptionIndex ?? 'NA'}`;
     if (announcedResultRef.current === resultSignature) return;
     announcedResultRef.current = resultSignature;
 
-    const selectedOption = current?.selectedOptionIndex !== undefined ? questionOptions[current.selectedOptionIndex]?.key : undefined;
+    const selectedOption = selectedOptionIndex !== undefined ? questionOptions[selectedOptionIndex]?.key : undefined;
     const correctOption = questionOptions[correctOptionIndex]?.key ?? String.fromCharCode(65 + correctOptionIndex);
-    const isCorrect = current?.selectedOptionIndex === correctOptionIndex;
+    const isCorrect = selectedOptionIndex === correctOptionIndex;
     const verdict = constructVerdict(isCorrect, activeTeamName, correctOption, selectedOption);
 
     void (async () => {
@@ -301,7 +337,7 @@ export default function DisplayPage() {
 
       await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is TTSAudioPayload => Boolean(audio)));
     })();
-  }, [activeTeamName, correctOptionIndex, current?.selectedOptionIndex, currentQuestionId, playSequence, questionOptions, state]);
+  }, [activeTeamName, correctOptionIndex, currentQuestionId, playSequence, questionOptions, selectedOptionIndex, state]);
 
   useEffect(() => {
     if (countdown !== 10 || !currentQuestionId) return;
@@ -393,7 +429,7 @@ export default function DisplayPage() {
               )}
             </div>
 
-            <h2 className="text-4xl font-bold leading-tight lg:text-6xl">{current?.question?.text ?? 'Waiting for question...'}</h2>
+            <h2 className="text-4xl font-bold leading-tight lg:text-6xl">{questionText ?? 'Waiting for question...'}</h2>
 
             <ul className="mt-8 grid gap-4 lg:grid-cols-2">
               {questionOptions.map((option, index) => {
