@@ -59,6 +59,20 @@ function parseSampleRateFromMimeType(mimeType?: string): number | undefined {
   return Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : undefined;
 }
 
+function decodeAsLikelyPCM16(context: AudioContext, arrayBuffer: ArrayBuffer): AudioBuffer | undefined {
+  const commonSampleRates = [24000, 22050, 16000];
+
+  for (const sampleRate of commonSampleRates) {
+    try {
+      return decodePCM16ToAudioBuffer(context, arrayBuffer, sampleRate);
+    } catch {
+      // try next sample rate
+    }
+  }
+
+  return undefined;
+}
+
 async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Promise<void> {
   await new Promise<void>((resolve) => {
     const source = context.createBufferSource();
@@ -118,7 +132,21 @@ export function useAudioController() {
         return decodePCM16ToAudioBuffer(context, arrayBuffer, sampleRate);
       }
 
-      return await context.decodeAudioData(arrayBuffer.slice(0));
+      try {
+        return await context.decodeAudioData(arrayBuffer.slice(0));
+      } catch (decodeError) {
+        if (!mimeType) {
+          const pcmFallback = decodeAsLikelyPCM16(context, arrayBuffer);
+          if (pcmFallback) {
+            console.warn('[AudioController] Falling back to PCM16 decode without mimeType.', {
+              mimeType: audio.mimeType,
+            });
+            return pcmFallback;
+          }
+        }
+
+        throw decodeError;
+      }
     } catch (error) {
       console.error('[AudioController] Failed to decode TTS audio payload.', {
         mimeType: audio.mimeType,
