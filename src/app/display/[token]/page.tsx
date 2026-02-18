@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { useAudioController } from '@/src/hooks/useAudioController';
 
 export default function DisplayPage() {
     const params = useParams();
@@ -11,6 +12,8 @@ export default function DisplayPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [errorPayload, setErrorPayload] = useState<any>(null);
+    const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
+    const { speak } = useAudioController();
 
     useEffect(() => {
         if (!token) return;
@@ -40,7 +43,7 @@ export default function DisplayPage() {
         };
 
         fetchData();
-        const interval = setInterval(fetchData, 5000); // Auto-refresh every 5s
+        const interval = setInterval(fetchData, 1000); // Auto-refresh every 1s for near-live display
         return () => clearInterval(interval);
     }, [token]);
 
@@ -50,6 +53,38 @@ export default function DisplayPage() {
         const t = setInterval(() => setCurrentTimeMs(Date.now()), 100);
         return () => clearInterval(t);
     }, []);
+
+    const session = data?.session;
+    const currentQuestion = data?.currentQuestion;
+    const isLive = session?.questionState === 'LIVE';
+    const startedAt = session?.questionStartedAt;
+    const duration = session?.timerDurationSec || 20;
+
+    useEffect(() => {
+        if (!currentQuestion || !session) {
+            return;
+        }
+
+        if (session.questionState !== 'LIVE') {
+            return;
+        }
+
+        const questionKey = `${currentQuestion.id}-${session.concernTeamId || 'ALL'}`;
+        if (questionKey === lastAnnouncedQuestionKey) {
+            return;
+        }
+
+        const teamName = session.concernTeamName || 'all teams';
+        const optionSpeech = Array.isArray(currentQuestion.options)
+            ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
+            : '';
+
+        const intro = `Question is for ${teamName}. Countdown starts at ${duration} seconds.`;
+        const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
+
+        setLastAnnouncedQuestionKey(questionKey);
+        void speak(message);
+    }, [currentQuestion, duration, lastAnnouncedQuestionKey, session, speak]);
 
     if (loading && !data && !error) {
         return (
@@ -103,14 +138,11 @@ export default function DisplayPage() {
         );
     }
 
-    const { session, leaderboard, currentQuestion, recentAnswers } = data;
-    const isLive = session.questionState === 'LIVE';
+    const { leaderboard, recentAnswers } = data;
     const isLocked = session.questionState === 'LOCKED';
     const isRevealed = session.questionState === 'REVEALED';
 
     // Calc remaining time
-    const startedAt = session.questionStartedAt;
-    const duration = session.timerDurationSec || 20;
     let remaining = 0;
     if (isLive && startedAt) {
         const elapsed = (currentTimeMs - startedAt) / 1000;
@@ -293,6 +325,19 @@ export default function DisplayPage() {
                                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
 
                                 <div className="relative z-10 space-y-6">
+                                    <div className="bg-white/15 border border-white/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
+                                            <div className="text-2xl font-black tracking-tight text-white italic">
+                                                {session.concernTeamName || 'All Teams'}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Countdown</div>
+                                            <div className="text-3xl font-mono font-black text-white">{isLive ? `${remaining}s` : `${duration}s`}</div>
+                                        </div>
+                                    </div>
+
                                     <div className="flex justify-between items-start">
                                         <div className="flex gap-2 flex-wrap">
                                             {currentQuestion.category && (
