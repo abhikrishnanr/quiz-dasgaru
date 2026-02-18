@@ -25,6 +25,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
     const [activeTab, setActiveTab] = useState<AdminTab>('QUESTIONS');
     const [questionsSubTab, setQuestionsSubTab] = useState<'active' | 'done'>('active');
     const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+    const [showScoreboard, setShowScoreboard] = useState(false);
 
     // Track editing state
     const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
@@ -33,12 +34,14 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
 
     const fetchDetails = async () => {
         try {
-            const [detailsRes, answersRes] = await Promise.all([
+            const [detailsRes, answersRes, scoreboardRes] = await Promise.all([
                 getJson<AdminSessionDetails>(`/api/admin/session/${encodeURIComponent(sessionId)}/details`),
-                getJson<{ answers: { questionId: string }[] }>(`/api/admin/session/${encodeURIComponent(sessionId)}/answers`)
+                getJson<{ answers: { questionId: string }[] }>(`/api/admin/session/${encodeURIComponent(sessionId)}/answers`),
+                getJson<{ showScoreboard: boolean }>(`/api/admin/session/${encodeURIComponent(sessionId)}/scoreboard`),
             ]);
 
             setDetails(detailsRes);
+            setShowScoreboard(Boolean(scoreboardRes.showScoreboard));
 
             if (answersRes.answers) {
                 const ids = new Set(answersRes.answers.map(a => a.questionId));
@@ -197,6 +200,24 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
 
 
 
+
+    const toggleScoreboard = async () => {
+        try {
+            const nextValue = !showScoreboard;
+            await postJson(`/api/admin/session/${encodeURIComponent(sessionId)}/scoreboard`, { showScoreboard: nextValue });
+            setShowScoreboard(nextValue);
+            emitToast({
+                level: 'success',
+                title: nextValue ? 'Scoreboard opened' : 'Scoreboard hidden',
+                message: nextValue
+                    ? 'Display screen switched to full scoreboard mode.'
+                    : 'Display screen returned to host + question mode.',
+            });
+        } catch {
+            emitToast({ level: 'error', title: 'Error', message: 'Failed to toggle scoreboard mode.' });
+        }
+    };
+
     if (loading) return <div className="p-8 text-center">Loading session {sessionId}...</div>;
     if (!details) return <div className="p-8 text-center text-red-600">Session not found.</div>;
 
@@ -205,9 +226,19 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
     return (
         <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 py-6 transition-all">
             {/* Top Navigation */}
-            <div className="mb-6">
+            <div className="mb-6 flex flex-col gap-4">
                 <button onClick={onBack} className="text-slate-500 hover:text-slate-700 font-medium flex items-center gap-2 text-sm">
                     <span>←</span> Back to Dashboard
+                </button>
+
+                <button
+                    onClick={toggleScoreboard}
+                    className={`w-full rounded-2xl border px-6 py-5 text-xl font-black uppercase tracking-wide transition-all shadow-lg ${showScoreboard
+                        ? 'border-blue-800 bg-gradient-to-r from-blue-900 to-slate-900 text-blue-100 hover:from-blue-800 hover:to-slate-800'
+                        : 'border-blue-300 bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
+                        }`}
+                >
+                    {showScoreboard ? 'Close Scoreboard on Display' : 'Show Scoreboard on Display'}
                 </button>
             </div>
 
