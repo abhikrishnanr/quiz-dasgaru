@@ -1,6 +1,10 @@
 'use client';
 
+import AIHostAvatar from '@/src/components/AIHostAvatar';
+import { useAudioController } from '@/src/hooks/useAudioController';
 import { publicApi } from '@/src/lib/api/public';
+import { constructVerdict, HOST_SCRIPTS } from '@/src/lib/constants';
+import { generateCommentary, getTTSAudio } from '@/src/services/aiService';
 import { emitToast } from '@/src/lib/ui/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -8,7 +12,10 @@ type QuizState = 'PREVIEW' | 'LIVE' | 'LOCKED' | 'REVEALED' | string;
 
 type CurrentResponse = {
   state?: QuizState;
+  activeTeamName?: string;
+  selectedOptionIndex?: number;
   question?: {
+    id?: string;
     text?: string;
     options?: Array<string | { key?: string; text?: string }>;
     correctOptionIndex?: number;
@@ -69,6 +76,10 @@ export default function DisplayPage() {
   const [lastPollAt, setLastPollAt] = useState<number | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const lastNetworkToastAtRef = useRef(0);
+  const announcedQuestionRef = useRef<string | null>(null);
+  const announcedResultRef = useRef<string | null>(null);
+  const announcedTenSecondRef = useRef<string | null>(null);
+  const { isSpeaking, playSequence, speak } = useAudioController();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -200,9 +211,76 @@ export default function DisplayPage() {
   }, [current?.questionStartedAt, current?.serverNowEpochMs, current?.timerDurationSec, tickNow]);
 
   const state = current?.state ?? 'PREVIEW';
+  const activeTeamName = current?.activeTeamName ?? 'Team';
   const correctOptionIndex = current?.question?.correctOptionIndex;
   const questionOptions = (current?.question?.options ?? []).map((option, index) => normalizeDisplayOption(option, index));
   const pollStatus = lastPollAt ? `Last poll ${new Date(lastPollAt).toLocaleTimeString()}` : 'No successful polls yet';
+
+  useEffect(() => {
+    void speak(HOST_SCRIPTS.INTRO);
+  }, [speak]);
+
+  useEffect(() => {
+    if (!current?.question?.text || questionOptions.length === 0) {
+      return;
+    }
+
+    const questionId = current.question.id ?? `${current.question.text}-${questionOptions.map((option) => option.text).join('|')}`;
+    if (announcedQuestionRef.current === questionId) {
+      return;
+    }
+
+    announcedQuestionRef.current = questionId;
+    announcedTenSecondRef.current = null;
+
+    const optionsText = questionOptions.map((option) => `${option.key}. ${option.text}`).join('. ');
+    const message = `Question for ${activeTeamName}. ${current.question.text}. Options are ${optionsText}.`;
+
+    void speak(message);
+  }, [activeTeamName, current?.question?.id, current?.question?.text, questionOptions, speak]);
+
+  useEffect(() => {
+    if (state !== 'REVEALED' || correctOptionIndex === undefined) {
+      return;
+    }
+
+    const resultSignature = `${current?.question?.id ?? current?.question?.text}-${correctOptionIndex}-${current?.selectedOptionIndex ?? 'NA'}`;
+    if (announcedResultRef.current === resultSignature) {
+      return;
+    }
+
+    announcedResultRef.current = resultSignature;
+
+    const selectedOption = current?.selectedOptionIndex !== undefined ? questionOptions[current.selectedOptionIndex]?.key : undefined;
+    const correctOption = questionOptions[correctOptionIndex]?.key ?? String.fromCharCode(65 + correctOptionIndex);
+    const isCorrect = current?.selectedOptionIndex === correctOptionIndex;
+    const verdict = constructVerdict(isCorrect, activeTeamName, correctOption, selectedOption);
+
+    void (async () => {
+      const wittyComment = await generateCommentary(activeTeamName, isCorrect, isCorrect ? 10 : 0);
+      const [memeAudio, technicalAudio, wittyAudio] = await Promise.all([
+        getTTSAudio(verdict.meme),
+        getTTSAudio(verdict.technical),
+        wittyComment ? getTTSAudio(wittyComment) : Promise.resolve(undefined),
+      ]);
+
+      await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is string => Boolean(audio)));
+    })();
+  }, [activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, questionOptions, state]);
+
+  useEffect(() => {
+    if (countdown !== 10 || !current?.question?.text) {
+      return;
+    }
+
+    const questionId = current.question.id ?? current.question.text;
+    if (announcedTenSecondRef.current === questionId) {
+      return;
+    }
+
+    announcedTenSecondRef.current = questionId;
+    void speak('10 seconds remaining.');
+  }, [countdown, current?.question?.id, current?.question?.text, speak]);
 
   return (
     <section className="fixed inset-0 overflow-y-auto bg-slate-950 p-8 text-slate-100 lg:p-14">
@@ -249,7 +327,8 @@ export default function DisplayPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8">
+        <div className="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div>
           <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
             {current?.question?.text ?? 'Waiting for question...'}
           </h2>
@@ -271,6 +350,12 @@ export default function DisplayPage() {
               );
             })}
           </ul>
+          </div>
+
+          <div className="mx-auto w-full max-w-80">
+            <AIHostAvatar isSpeaking={isSpeaking} size="h-80 w-full" />
+            <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
+          </div>
         </div>
 
         {state === 'REVEALED' && (
