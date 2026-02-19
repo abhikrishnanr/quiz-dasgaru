@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAudioController } from '@/src/hooks/useAudioController';
 import AIHostAvatar from '@/src/components/AIHostAvatar';
+import DisplayBackgroundFX from '@/src/components/DisplayBackgroundFX';
 
 export default function DisplayPage() {
     const params = useParams();
@@ -183,14 +184,12 @@ export default function DisplayPage() {
     }
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[#050816] text-white font-sans selection:bg-indigo-500/30">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_85%_20%,rgba(129,140,248,0.2),transparent_40%),radial-gradient(circle_at_50%_80%,rgba(45,212,191,0.12),transparent_45%)]" />
-                <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(2px_2px_at_20px_30px,rgba(255,255,255,0.85),transparent),radial-gradient(1px_1px_at_80px_120px,rgba(125,211,252,0.8),transparent),radial-gradient(1px_1px_at_140px_70px,rgba(199,210,254,0.65),transparent)] [background-size:180px_180px] animate-[starfieldDrift_90s_linear_infinite]" />
-                <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(1px_1px_at_30px_40px,rgba(255,255,255,0.8),transparent),radial-gradient(1px_1px_at_100px_100px,rgba(103,232,249,0.75),transparent)] [background-size:140px_140px] animate-[starfieldDrift_60s_linear_infinite_reverse]" />
-            </div>
+        <div className="relative min-h-screen overflow-hidden bg-[#020720] text-white font-sans selection:bg-indigo-500/30">
+            <DisplayBackgroundFX />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(56,189,248,0.09),transparent_32%,rgba(99,102,241,0.08),transparent_70%)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,rgba(59,130,246,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(59,130,246,0.08)_1px,transparent_1px)] [background-size:84px_84px]" />
             {/* Header */}
-            <header className="relative bg-slate-900/45 backdrop-blur-md border-b border-slate-800 sticky top-0 z-20">
+            <header className="relative bg-[#060d2a]/80 backdrop-blur-md border-b border-indigo-400/20 sticky top-0 z-20">
                 <div className="max-w-[1920px] mx-auto px-6 py-4 flex justify-between items-center relative">
                     {/* Left Logo - Absolute positioned or flex depending on preference */}
                     <div className="flex items-center gap-4">
@@ -364,9 +363,8 @@ export default function DisplayPage() {
                         </div>
 
                         {currentQuestion ? (
-                            <div className="rounded-[2rem] p-8 md:p-10 shadow-[0_20px_90px_rgba(15,23,42,0.45)] border border-cyan-200/20 relative overflow-hidden bg-slate-900/45 backdrop-blur-xl">
-                                <div className="absolute inset-0 bg-[conic-gradient(from_140deg_at_10%_20%,rgba(56,189,248,0.18),transparent_35%,rgba(129,140,248,0.2),transparent_65%,rgba(45,212,191,0.2))] animate-[spin_30s_linear_infinite]"></div>
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(56,189,248,0.12),transparent_35%)]"></div>
+                            <div className="rounded-[2.25rem] p-8 md:p-10 shadow-[0_20px_120px_rgba(10,20,70,0.5)] border border-indigo-400/50 relative overflow-hidden bg-[#0a1238]/75 backdrop-blur-xl">
+                                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(99,102,241,0.15),transparent_38%,rgba(56,189,248,0.1),transparent_75%)]" />
 
                                 <div className="relative z-10 grid gap-6 xl:grid-cols-4">
                                     <div className="xl:col-span-1">
@@ -393,7 +391,7 @@ export default function DisplayPage() {
                                     </div>
 
                                     <div className="xl:col-span-3 space-y-6">
-                                        <div className="bg-slate-900/55 border border-cyan-200/20 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_30px_rgba(56,189,248,0.12)]">
+                                        <div className="bg-[#091131]/80 border border-indigo-300/30 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
                                             <div>
                                                 <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
                                                 <div className="text-3xl font-black tracking-tight text-white italic drop-shadow-[0_0_15px_rgba(125,211,252,0.35)] animate-[pulse_5s_ease-in-out_infinite]">
@@ -426,11 +424,11 @@ export default function DisplayPage() {
                                             </div>
                                         </div>
 
-                                        <h3 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-white italic animate-[questionGlow_8s_ease-in-out_infinite]">
+                                        <h3 className="text-4xl lg:text-6xl font-black leading-[1.08] tracking-tight text-white">
                                             "{currentQuestion.text}"
                                         </h3>
 
-                                        <div className="grid grid-cols-1 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {currentQuestion.options.map((opt: any) => {
                                                 const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
                                                 return (
@@ -438,7 +436,7 @@ export default function DisplayPage() {
                                                         key={opt.key}
                                                         className={`px-5 py-4 rounded-2xl border transition-all duration-500 flex items-center gap-4 ${isCorrect
                                                             ? 'bg-emerald-500/85 border-emerald-300 text-white shadow-[0_0_35px_rgba(16,185,129,0.55)] scale-[1.02]'
-                                                            : 'bg-slate-900/55 border-cyan-100/20 text-white/90 hover:-translate-y-0.5 hover:border-cyan-200/40 hover:shadow-[0_0_25px_rgba(56,189,248,0.2)]'
+                                                            : 'bg-[#091236]/85 border-indigo-300/20 text-white/95 hover:-translate-y-0.5 hover:border-indigo-300/45 hover:shadow-[0_0_35px_rgba(99,102,241,0.28)]'
                                                             }`}
                                                     >
                                                         <span className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${isCorrect ? 'bg-white text-emerald-600' : 'bg-cyan-300/15 text-cyan-100 border border-cyan-200/20'}`}>
@@ -511,17 +509,6 @@ export default function DisplayPage() {
                 </div>
             </main>
 
-            <style jsx global>{`
-                @keyframes starfieldDrift {
-                    from { transform: translate3d(0, 0, 0); }
-                    to { transform: translate3d(-140px, -220px, 0); }
-                }
-
-                @keyframes questionGlow {
-                    0%, 100% { text-shadow: 0 0 24px rgba(125, 211, 252, 0.25); }
-                    50% { text-shadow: 0 0 34px rgba(129, 140, 248, 0.45); }
-                }
-            `}</style>
         </div>
     );
 }
