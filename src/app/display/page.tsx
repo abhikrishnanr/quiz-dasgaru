@@ -6,7 +6,7 @@ import { publicApi } from '@/src/lib/api/public';
 import { constructVerdict, HOST_SCRIPTS } from '@/src/lib/constants';
 import { generateCommentary, getTTSAudio, type TTSAudioPayload } from '@/src/services/aiService';
 import { emitToast } from '@/src/lib/ui/toast';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type QuizState = 'PREVIEW' | 'LIVE' | 'LOCKED' | 'REVEALED' | string;
 
@@ -75,11 +75,24 @@ export default function DisplayPage() {
   const [tickNow, setTickNow] = useState(() => Date.now());
   const [lastPollAt, setLastPollAt] = useState<number | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [hostTranscript, setHostTranscript] = useState<string[]>([]);
   const lastNetworkToastAtRef = useRef(0);
   const announcedQuestionRef = useRef<string | null>(null);
   const announcedResultRef = useRef<string | null>(null);
   const announcedTenSecondRef = useRef<string | null>(null);
   const { isSpeaking, playSequence, speak } = useAudioController();
+
+  const pushHostLine = useCallback((line: string) => {
+    const normalizedLine = line.trim();
+    if (!normalizedLine) {
+      return;
+    }
+
+    setHostTranscript((previous) => {
+      const next = [...previous, normalizedLine];
+      return next.slice(-6);
+    });
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -217,8 +230,9 @@ export default function DisplayPage() {
   const pollStatus = lastPollAt ? `Last poll ${new Date(lastPollAt).toLocaleTimeString()}` : 'No successful polls yet';
 
   useEffect(() => {
+    pushHostLine(HOST_SCRIPTS.INTRO);
     void speak(HOST_SCRIPTS.INTRO);
-  }, [speak]);
+  }, [pushHostLine, speak]);
 
   useEffect(() => {
     if (!current?.question?.text || questionOptions.length === 0) {
@@ -236,8 +250,9 @@ export default function DisplayPage() {
     const optionsText = questionOptions.map((option) => `${option.key}. ${option.text}`).join('. ');
     const message = `Question for ${activeTeamName}. ${current.question.text}. Options are ${optionsText}.`;
 
+    pushHostLine(message);
     void speak(message);
-  }, [activeTeamName, current?.question?.id, current?.question?.text, questionOptions, speak]);
+  }, [activeTeamName, current?.question?.id, current?.question?.text, pushHostLine, questionOptions, speak]);
 
   useEffect(() => {
     if (state !== 'REVEALED' || correctOptionIndex === undefined) {
@@ -258,6 +273,8 @@ export default function DisplayPage() {
 
     void (async () => {
       const wittyComment = await generateCommentary(activeTeamName, isCorrect, isCorrect ? 10 : 0);
+      const spokenLines = [verdict.meme, verdict.technical, wittyComment].filter((line): line is string => Boolean(line));
+      spokenLines.forEach(pushHostLine);
       const [memeAudio, technicalAudio, wittyAudio] = await Promise.all([
         getTTSAudio(verdict.meme),
         getTTSAudio(verdict.technical),
@@ -266,7 +283,7 @@ export default function DisplayPage() {
 
       await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is TTSAudioPayload => Boolean(audio)));
     })();
-  }, [activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, questionOptions, state]);
+  }, [activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, pushHostLine, questionOptions, state]);
 
   useEffect(() => {
     if (countdown !== 10 || !current?.question?.text) {
@@ -279,8 +296,9 @@ export default function DisplayPage() {
     }
 
     announcedTenSecondRef.current = questionId;
+    pushHostLine('10 seconds remaining.');
     void speak('10 seconds remaining.');
-  }, [countdown, current?.question?.id, current?.question?.text, speak]);
+  }, [countdown, current?.question?.id, current?.question?.text, pushHostLine, speak]);
 
   return (
     <section className="fixed inset-0 overflow-y-auto bg-slate-950 p-8 text-slate-100 lg:p-14">
@@ -327,8 +345,25 @@ export default function DisplayPage() {
           </div>
         )}
 
-        <div className="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div>
+        <div className="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-8 xl:grid-cols-4">
+          <div className="xl:col-span-1">
+            <AIHostAvatar isSpeaking={isSpeaking} size="h-80 w-full" />
+            <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
+
+            <div className="mt-4 rounded-xl border border-cyan-500/30 bg-slate-950/70 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-200">Gemini voice transcript</h3>
+              <ul className="mt-3 space-y-2 text-sm text-slate-200">
+                {hostTranscript.map((line, index) => (
+                  <li key={`${index}-${line.slice(0, 24)}`} className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    {line}
+                  </li>
+                ))}
+                {hostTranscript.length === 0 && <li className="text-slate-400">Transcript will appear as Gemini speaks.</li>}
+              </ul>
+            </div>
+          </div>
+
+          <div className="xl:col-span-3">
           <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
             {current?.question?.text ?? 'Waiting for question...'}
           </h2>
@@ -350,11 +385,6 @@ export default function DisplayPage() {
               );
             })}
           </ul>
-          </div>
-
-          <div className="mx-auto w-full max-w-80">
-            <AIHostAvatar isSpeaking={isSpeaking} size="h-80 w-full" />
-            <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
           </div>
         </div>
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAudioController } from '@/src/hooks/useAudioController';
+import AIHostAvatar from '@/src/components/AIHostAvatar';
 
 export default function DisplayPage() {
     const params = useParams();
@@ -15,7 +16,18 @@ export default function DisplayPage() {
     const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
     const [isTestAudioRunning, setIsTestAudioRunning] = useState(false);
     const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
+    const [hostTranscript, setHostTranscript] = useState<string[]>([]);
     const { speak, isFetching, isSpeaking } = useAudioController();
+
+    const pushHostLine = (line: string) => {
+        const normalizedLine = line.trim();
+        if (!normalizedLine) return;
+
+        setHostTranscript((previous) => {
+            const next = [...previous, normalizedLine];
+            return next.slice(-6);
+        });
+    };
 
     useEffect(() => {
         if (!token) return;
@@ -88,6 +100,7 @@ export default function DisplayPage() {
         const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
         setLastAnnouncedQuestionKey(questionKey);
+        pushHostLine(message);
         void speak(message).then((played) => {
             console.info('[Display TTS] Auto announcement played:', played);
         });
@@ -350,66 +363,91 @@ export default function DisplayPage() {
                                 {/* Decor */}
                                 <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
 
-                                <div className="relative z-10 space-y-6">
-                                    <div className="bg-white/15 border border-white/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-                                        <div>
-                                            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
-                                            <div className="text-2xl font-black tracking-tight text-white italic">
-                                                {session.concernTeamName || 'All Teams'}
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Countdown</div>
-                                            <div className="text-3xl font-mono font-black text-white">{isLive ? `${remaining}s` : `${duration}s`}</div>
+                                <div className="relative z-10 grid gap-6 xl:grid-cols-4">
+                                    <div className="xl:col-span-1">
+                                        <AIHostAvatar isSpeaking={isSpeaking} size="h-64 w-full" />
+                                        <p className="mt-2 text-center text-xs font-semibold uppercase tracking-wide text-indigo-100/80">
+                                            AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}
+                                        </p>
+
+                                        <div className="mt-4 rounded-2xl border border-white/20 bg-slate-950/35 p-4">
+                                            <h3 className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-100/80">Gemini Voice Transcript</h3>
+                                            <ul className="mt-3 space-y-2 text-xs text-white/90">
+                                                {hostTranscript.map((line, index) => (
+                                                    <li key={`${index}-${line.slice(0, 24)}`} className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 leading-relaxed">
+                                                        {line}
+                                                    </li>
+                                                ))}
+                                                {hostTranscript.length === 0 && (
+                                                    <li className="rounded-xl border border-dashed border-white/20 bg-white/5 px-3 py-2 text-white/70">
+                                                        Transcript appears here when Gemini reads the question.
+                                                    </li>
+                                                )}
+                                            </ul>
                                         </div>
                                     </div>
 
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex gap-2 flex-wrap">
-                                            {currentQuestion.category && (
-                                                <div className="bg-white/30 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border border-white/30 text-white">
-                                                    {currentQuestion.category}
+                                    <div className="xl:col-span-3 space-y-6">
+                                        <div className="bg-white/15 border border-white/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
+                                                <div className="text-2xl font-black tracking-tight text-white italic">
+                                                    {session.concernTeamName || 'All Teams'}
                                                 </div>
-                                            )}
-                                            <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border border-white/20 text-white/90">
-                                                {currentQuestion.topic || 'General'}
                                             </div>
-                                            {currentQuestion.difficulty && (
-                                                <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border ${currentQuestion.difficulty === 'HARD' ? 'bg-red-500/20 border-red-500/30 text-red-200' :
-                                                    currentQuestion.difficulty === 'MEDIUM' ? 'bg-amber-500/20 border-amber-500/30 text-amber-200' :
-                                                        'bg-emerald-500/20 border-emerald-500/30 text-emerald-200'
-                                                    }`}>
-                                                    {currentQuestion.difficulty}
-                                                </div>
-                                            )}
+                                            <div className="text-right">
+                                                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Countdown</div>
+                                                <div className="text-3xl font-mono font-black text-white">{isLive ? `${remaining}s` : `${duration}s`}</div>
+                                            </div>
                                         </div>
-                                        <div className="text-white/60 font-black text-sm uppercase">
-                                            {currentQuestion.points} Points
-                                        </div>
-                                    </div>
 
-                                    <h3 className="text-3xl font-black leading-[1.1] tracking-tight text-white italic">
-                                        "{currentQuestion.text}"
-                                    </h3>
-
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {currentQuestion.options.map((opt: any) => {
-                                            const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
-                                            return (
-                                                <div
-                                                    key={opt.key}
-                                                    className={`px-5 py-3 rounded-2xl border transition-all duration-300 flex items-center gap-4 ${isCorrect
-                                                        ? 'bg-emerald-500 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-[1.02]'
-                                                        : 'bg-white/10 border-white/10 text-white/80'
-                                                        }`}
-                                                >
-                                                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${isCorrect ? 'bg-white text-emerald-600' : 'bg-white/20 text-white'}`}>
-                                                        {opt.key}
-                                                    </span>
-                                                    <span className="font-bold text-lg">{opt.text}</span>
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex gap-2 flex-wrap">
+                                                {currentQuestion.category && (
+                                                    <div className="bg-white/30 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border border-white/30 text-white">
+                                                        {currentQuestion.category}
+                                                    </div>
+                                                )}
+                                                <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border border-white/20 text-white/90">
+                                                    {currentQuestion.topic || 'General'}
                                                 </div>
-                                            );
-                                        })}
+                                                {currentQuestion.difficulty && (
+                                                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border ${currentQuestion.difficulty === 'HARD' ? 'bg-red-500/20 border-red-500/30 text-red-200' :
+                                                        currentQuestion.difficulty === 'MEDIUM' ? 'bg-amber-500/20 border-amber-500/30 text-amber-200' :
+                                                            'bg-emerald-500/20 border-emerald-500/30 text-emerald-200'
+                                                        }`}>
+                                                        {currentQuestion.difficulty}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="text-white/60 font-black text-sm uppercase">
+                                                {currentQuestion.points} Points
+                                            </div>
+                                        </div>
+
+                                        <h3 className="text-3xl font-black leading-[1.1] tracking-tight text-white italic">
+                                            "{currentQuestion.text}"
+                                        </h3>
+
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {currentQuestion.options.map((opt: any) => {
+                                                const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
+                                                return (
+                                                    <div
+                                                        key={opt.key}
+                                                        className={`px-5 py-3 rounded-2xl border transition-all duration-300 flex items-center gap-4 ${isCorrect
+                                                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-[1.02]'
+                                                            : 'bg-white/10 border-white/10 text-white/80'
+                                                            }`}
+                                                    >
+                                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${isCorrect ? 'bg-white text-emerald-600' : 'bg-white/20 text-white'}`}>
+                                                            {opt.key}
+                                                        </span>
+                                                        <span className="font-bold text-lg">{opt.text}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
