@@ -96,7 +96,7 @@ export default function DisplayPage() {
             ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
             : '';
 
-        const intro = `Question is for ${teamName}. Countdown starts at ${duration} seconds.`;
+        const intro = `Question is for ${teamName}.`;
         const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
         setLastAnnouncedQuestionKey(questionKey);
@@ -183,9 +183,14 @@ export default function DisplayPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0f172a] text-white font-sans selection:bg-indigo-500/30">
+        <div className="relative min-h-screen overflow-hidden bg-[#050816] text-white font-sans selection:bg-indigo-500/30">
+            <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_85%_20%,rgba(129,140,248,0.2),transparent_40%),radial-gradient(circle_at_50%_80%,rgba(45,212,191,0.12),transparent_45%)]" />
+                <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(2px_2px_at_20px_30px,rgba(255,255,255,0.85),transparent),radial-gradient(1px_1px_at_80px_120px,rgba(125,211,252,0.8),transparent),radial-gradient(1px_1px_at_140px_70px,rgba(199,210,254,0.65),transparent)] [background-size:180px_180px] animate-[starfieldDrift_90s_linear_infinite]" />
+                <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(1px_1px_at_30px_40px,rgba(255,255,255,0.8),transparent),radial-gradient(1px_1px_at_100px_100px,rgba(103,232,249,0.75),transparent)] [background-size:140px_140px] animate-[starfieldDrift_60s_linear_infinite_reverse]" />
+            </div>
             {/* Header */}
-            <header className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 sticky top-0 z-20">
+            <header className="relative bg-slate-900/45 backdrop-blur-md border-b border-slate-800 sticky top-0 z-20">
                 <div className="max-w-[1920px] mx-auto px-6 py-4 flex justify-between items-center relative">
                     {/* Left Logo - Absolute positioned or flex depending on preference */}
                     <div className="flex items-center gap-4">
@@ -346,7 +351,7 @@ export default function DisplayPage() {
             )}
 
             {/* Main Content Grid */}
-            <main className="max-w-[1920px] mx-auto p-6 lg:p-10">
+            <main className="relative z-10 max-w-[1920px] mx-auto p-6 lg:p-10">
 
                 {/* Live Data */}
                 <div className="space-y-10">
@@ -359,13 +364,13 @@ export default function DisplayPage() {
                         </div>
 
                         {currentQuestion ? (
-                            <div className="bg-indigo-600 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(79,70,229,0.3)] border border-white/10 relative overflow-hidden">
-                                {/* Decor */}
-                                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                            <div className="rounded-[2rem] p-8 md:p-10 shadow-[0_20px_90px_rgba(15,23,42,0.45)] border border-cyan-200/20 relative overflow-hidden bg-slate-900/45 backdrop-blur-xl">
+                                <div className="absolute inset-0 bg-[conic-gradient(from_140deg_at_10%_20%,rgba(56,189,248,0.18),transparent_35%,rgba(129,140,248,0.2),transparent_65%,rgba(45,212,191,0.2))] animate-[spin_30s_linear_infinite]"></div>
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(56,189,248,0.12),transparent_35%)]"></div>
 
                                 <div className="relative z-10 grid gap-6 xl:grid-cols-4">
                                     <div className="xl:col-span-1">
-                                        <AIHostAvatar isSpeaking={isSpeaking} size="h-64 w-full" />
+                                        <AIHostAvatar isSpeaking={isSpeaking} size="lg" />
                                         <p className="mt-2 text-center text-xs font-semibold uppercase tracking-wide text-indigo-100/80">
                                             AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}
                                         </p>
@@ -388,16 +393,12 @@ export default function DisplayPage() {
                                     </div>
 
                                     <div className="xl:col-span-3 space-y-6">
-                                        <div className="bg-white/15 border border-white/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                                        <div className="bg-slate-900/55 border border-cyan-200/20 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_30px_rgba(56,189,248,0.12)]">
                                             <div>
                                                 <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
-                                                <div className="text-2xl font-black tracking-tight text-white italic">
+                                                <div className="text-3xl font-black tracking-tight text-white italic drop-shadow-[0_0_15px_rgba(125,211,252,0.35)] animate-[pulse_5s_ease-in-out_infinite]">
                                                     {session.concernTeamName || 'All Teams'}
                                                 </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Countdown</div>
-                                                <div className="text-3xl font-mono font-black text-white">{isLive ? `${remaining}s` : `${duration}s`}</div>
                                             </div>
                                         </div>
 
@@ -425,7 +426,7 @@ export default function DisplayPage() {
                                             </div>
                                         </div>
 
-                                        <h3 className="text-3xl font-black leading-[1.1] tracking-tight text-white italic">
+                                        <h3 className="text-4xl lg:text-5xl font-black leading-[1.1] tracking-tight text-white italic animate-[questionGlow_8s_ease-in-out_infinite]">
                                             "{currentQuestion.text}"
                                         </h3>
 
@@ -435,15 +436,15 @@ export default function DisplayPage() {
                                                 return (
                                                     <div
                                                         key={opt.key}
-                                                        className={`px-5 py-3 rounded-2xl border transition-all duration-300 flex items-center gap-4 ${isCorrect
-                                                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-[1.02]'
-                                                            : 'bg-white/10 border-white/10 text-white/80'
+                                                        className={`px-5 py-4 rounded-2xl border transition-all duration-500 flex items-center gap-4 ${isCorrect
+                                                            ? 'bg-emerald-500/85 border-emerald-300 text-white shadow-[0_0_35px_rgba(16,185,129,0.55)] scale-[1.02]'
+                                                            : 'bg-slate-900/55 border-cyan-100/20 text-white/90 hover:-translate-y-0.5 hover:border-cyan-200/40 hover:shadow-[0_0_25px_rgba(56,189,248,0.2)]'
                                                             }`}
                                                     >
-                                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${isCorrect ? 'bg-white text-emerald-600' : 'bg-white/20 text-white'}`}>
+                                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${isCorrect ? 'bg-white text-emerald-600' : 'bg-cyan-300/15 text-cyan-100 border border-cyan-200/20'}`}>
                                                             {opt.key}
                                                         </span>
-                                                        <span className="font-bold text-lg">{opt.text}</span>
+                                                        <span className="font-bold text-xl">{opt.text}</span>
                                                     </div>
                                                 );
                                             })}
@@ -509,6 +510,18 @@ export default function DisplayPage() {
 
                 </div>
             </main>
+
+            <style jsx global>{`
+                @keyframes starfieldDrift {
+                    from { transform: translate3d(0, 0, 0); }
+                    to { transform: translate3d(-140px, -220px, 0); }
+                }
+
+                @keyframes questionGlow {
+                    0%, 100% { text-shadow: 0 0 24px rgba(125, 211, 252, 0.25); }
+                    50% { text-shadow: 0 0 34px rgba(129, 140, 248, 0.45); }
+                }
+            `}</style>
         </div>
     );
 }
