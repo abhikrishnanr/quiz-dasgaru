@@ -43,6 +43,8 @@ Define these in `.env.local`:
 
 - `NEXT_PUBLIC_API_BASE_URL` - Base URL for the quiz API.
 - `NEXT_PUBLIC_APP_NAME` - Optional display name for the frontend.
+- `GOOGLE_API_KEY` - Server-side Google AI Studio key for paid Gemini API usage.
+- `GEMINI_API_KEY` - Backward-compatible server-side fallback key name.
 
 See `.env.example` for defaults.
 
