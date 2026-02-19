@@ -206,16 +206,26 @@ export function useAudioController() {
     [decodeAudio],
   );
 
+  const [isFetching, setIsFetching] = useState(false);
+
   const speak = useCallback(
     async (text: string): Promise<boolean> => {
-      const audio = await getTTSAudio(text);
-      if (!audio) {
+      setIsFetching(true);
+      try {
+        const audio = await getTTSAudio(text);
+        if (!audio) {
+          return false;
+        }
+        setIsFetching(false);
+        return playSequence([audio]);
+      } catch (error) {
+        console.error('[AudioController] Speak failed', error);
+        setIsFetching(false);
         return false;
       }
-      return playSequence([audio]);
     },
     [playSequence],
   );
 
-  return { isSpeaking, playSequence, speak };
+  return { isSpeaking, isFetching, playSequence, speak };
 }

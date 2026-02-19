@@ -71,10 +71,77 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
         }
     };
 
+    // Hoisted State for Controls
+    const [gameMode, setGameMode] = useState<'STANDARD' | 'BUZZER'>('STANDARD');
+    const [concernTeamId, setConcernTeamId] = useState<string>('');
+
+    // Sync initial state once loaded
+    useEffect(() => {
+        if (details?.session) {
+            // Only sync if local state is uninitialized o ensure we don't overwrite user selection during polling
+            // But if the server says we are in BUZZER mode, we should probably respect it initially
+            if (!gameMode && details.session.gameMode) setGameMode(details.session.gameMode);
+
+            // For concernTeamId, we generally want to persist the user's selection locally 
+            // even if the server refreshes.
+        }
+    }, [details?.session?.gameMode]); // Reduced dependency to avoid loops
+
+    const handleGameModeChange = async (newMode: 'STANDARD' | 'BUZZER') => {
+        setGameMode(newMode); // Optimistic update
+        try {
+            // We need to fetch the current session meta to preserve other fields, 
+            // but for now we might be able to patch just the gameMode if the API supports partial updates?
+            // The SessionSettings component sends the WHOLE payload. 
+            // Let's try sending just the gameMode if the backend supports partials, 
+            // OR we rely on details.session to backfill.
+
+            if (!details?.session) return;
+
+            const payload = {
+                eventName: details.session.eventName,
+                eventDate: details.session.eventDate,
+                eventVenue: details.session.eventVenue,
+                statusLabel: details.session.statusLabel,
+                description: details.session.description,
+                passcode: details.session.passcode,
+                maxTeams: details.session.maxTeams,
+                theme: details.session.theme,
+                organizer: details.session.organizer,
+                gameMode: newMode
+            };
+
+            await postJson(`/api/admin/session/${encodeURIComponent(sessionId)}/meta`, payload);
+            emitToast({ level: 'success', title: 'Mode Updated', message: `Switched to ${newMode} mode.` });
+            fetchDetails();
+        } catch (e) {
+            emitToast({ level: 'error', title: 'Error', message: 'Failed to save game mode.' });
+            // Revert on failure?
+            if (details?.session.gameMode) setGameMode(details.session.gameMode);
+        }
+    };
+
     const handleSetActiveQuestion = async (questionId: string) => {
         try {
-            await postJson(`/api/admin/session/${encodeURIComponent(sessionId)}/question/set`, { questionId });
-            emitToast({ level: 'success', title: 'Success', message: 'Question set as active.' });
+            const payload: any = {
+                questionId,
+            };
+
+            if (gameMode === 'STANDARD' && concernTeamId) {
+                payload.concernTeamId = concernTeamId;
+                payload.allowedTeamIds = [concernTeamId];
+                payload.allowedTeams = { teamIds: [concernTeamId] };
+            }
+
+            await postJson(`/api/admin/session/${encodeURIComponent(sessionId)}/question/set`, payload);
+
+            emitToast({
+                level: 'success',
+                title: 'Active',
+                message: gameMode === 'STANDARD' && concernTeamId
+                    ? `Active for ${details?.teams.find(t => t.teamId === concernTeamId)?.teamName || 'Team'}`
+                    : 'Question Set to Active'
+            });
             fetchDetails();
         } catch (e: any) {
             emitToast({ level: 'error', title: 'Error', message: e.message || 'Failed to set active question.' });
@@ -310,13 +377,25 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                                                                     <div className="flex gap-2">
                                                                         <button
                                                                             onClick={() => handleSetActiveQuestion(q.questionId)}
-                                                                            disabled={details.session.currentQuestionId === q.questionId || q.state === 'DONE' || answeredQuestionIds.has(q.questionId)}
-                                                                            className={`text-xs font-bold px-3 py-1.5 rounded transition-colors ${details.session.currentQuestionId === q.questionId || q.state === 'DONE' || answeredQuestionIds.has(q.questionId)
+                                                                            // Allow re-activating the current question to update the team
+                                                                            disabled={q.state === 'DONE' || answeredQuestionIds.has(q.questionId)}
+                                                                            title={gameMode === 'STANDARD' && concernTeamId ? `Activate for ${details.teams.find(t => t.teamId === concernTeamId)?.teamName}` : 'Activate Question'}
+                                                                            className={`text-xs font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1 ${q.state === 'DONE' || answeredQuestionIds.has(q.questionId)
                                                                                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                                                                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                                                                                : details.session.currentQuestionId === q.questionId
+                                                                                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-sm ring-2 ring-green-100'
+                                                                                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
                                                                                 }`}
                                                                         >
-                                                                            {details.session.currentQuestionId === q.questionId ? 'ACTIVE' : answeredQuestionIds.has(q.questionId) ? 'REVEALED' : 'ACTIVATE'}
+                                                                            {details.session.currentQuestionId === q.questionId
+                                                                                ? gameMode === 'STANDARD' && concernTeamId && details.session.concernTeamId !== concernTeamId
+                                                                                    ? `UPDATE (${details.teams.find(t => t.teamId === concernTeamId)?.teamName || 'Team'})`
+                                                                                    : 'ACTIVE (Re-Send)'
+                                                                                : answeredQuestionIds.has(q.questionId)
+                                                                                    ? 'REVEALED'
+                                                                                    : gameMode === 'STANDARD' && concernTeamId
+                                                                                        ? `ACTIVATE (${details.teams.find(t => t.teamId === concernTeamId)?.teamName || 'Team'})`
+                                                                                        : 'ACTIVATE'}
                                                                         </button>
                                                                         <button onClick={() => setEditingQuestion(q)} className="text-xs text-slate-500 hover:text-indigo-600 font-bold px-2">EDIT</button>
                                                                         <button onClick={() => handleDeleteQuestion(q.questionId)} className="text-xs text-slate-400 hover:text-red-600 font-bold px-2">DELETE</button>
@@ -364,13 +443,14 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                                                                                 </p>
                                                                             </div>
                                                                         ) : (
-                                                                            <SessionControls
-                                                                                sessionId={sessionId}
-                                                                                initialState={details.session}
-                                                                                teams={details.teams}
-                                                                                onRefresh={fetchDetails}
-                                                                                variant="compact"
-                                                                            />
+                                                                            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-center animate-pulse">
+                                                                                <p className="text-indigo-800 font-bold text-xs uppercase tracking-wide">
+                                                                                    Current Active Question
+                                                                                </p>
+                                                                                <p className="text-indigo-600 text-xs mt-1">
+                                                                                    Use sidebar controls to Start/Stop/Reveal
+                                                                                </p>
+                                                                            </div>
                                                                         )}
                                                                     </div>
                                                                 )}
@@ -549,6 +629,11 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                         teams={details.teams}
                         onRefresh={fetchDetails}
                         variant="default"
+                        // Pass hoisted state with persistence logic
+                        gameMode={gameMode}
+                        setGameMode={handleGameModeChange}
+                        concernTeamId={concernTeamId}
+                        setConcernTeamId={setConcernTeamId}
                     />
 
                     {/* Live Answers Preview Feed */}
