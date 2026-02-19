@@ -25,23 +25,27 @@ export const POST = async (
         {
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
+          concernTeamId: payload.concernTeamId,
           allowedTeams: payload.allowedTeams,
           firstAnswerLocksAll: payload.firstAnswerLocksAll,
         },
         {
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
+          concernTeamId: payload.concernTeamId,
           allowedTeamIds,
           firstAnswerLocksAll: payload.firstAnswerLocksAll,
         },
         {
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
+          concernTeamId: payload.concernTeamId,
           allowedTeamIds,
         },
         {
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
+          concernTeamId: payload.concernTeamId,
         },
       ];
     },
