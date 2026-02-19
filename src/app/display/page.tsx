@@ -76,11 +76,25 @@ export default function DisplayPage() {
   const [lastPollAt, setLastPollAt] = useState<number | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const lastNetworkToastAtRef = useRef(0);
   const announcedQuestionRef = useRef<string | null>(null);
   const announcedResultRef = useRef<string | null>(null);
   const announcedTenSecondRef = useRef<string | null>(null);
   const { isSpeaking, playSequence, speak } = useAudioController();
+
+  // User must click once to unlock audio (browser policy)
+  const handleUnlockAudio = useCallback(async () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        await ctx.resume();
+        ctx.close(); // We just needed the gesture; useAudioController manages its own ctx
+      }
+    } catch { /* ignore */ }
+    setAudioUnlocked(true);
+  }, []);
 
   const pushHostLine = useCallback((line: string) => {
     const normalizedLine = line.trim();
@@ -230,12 +244,13 @@ export default function DisplayPage() {
   const pollStatus = lastPollAt ? `Last poll ${new Date(lastPollAt).toLocaleTimeString()}` : 'No successful polls yet';
 
   useEffect(() => {
+    if (!audioUnlocked) return;
     pushHostLine(HOST_SCRIPTS.INTRO);
     void speak(HOST_SCRIPTS.INTRO);
-  }, [pushHostLine, speak]);
+  }, [audioUnlocked, pushHostLine, speak]);
 
   useEffect(() => {
-    if (!current?.question?.text || questionOptions.length === 0) {
+    if (!audioUnlocked || !current?.question?.text || questionOptions.length === 0) {
       return;
     }
 
@@ -252,7 +267,7 @@ export default function DisplayPage() {
 
     pushHostLine(message);
     void speak(message);
-  }, [activeTeamName, current?.question?.id, current?.question?.text, pushHostLine, questionOptions, speak]);
+  }, [audioUnlocked, activeTeamName, current?.question?.id, current?.question?.text, pushHostLine, questionOptions, speak]);
 
   useEffect(() => {
     if (state !== 'REVEALED' || correctOptionIndex === undefined) {
@@ -283,10 +298,10 @@ export default function DisplayPage() {
 
       await playSequence([memeAudio, technicalAudio, wittyAudio].filter((audio): audio is TTSAudioPayload => Boolean(audio)));
     })();
-  }, [activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, pushHostLine, questionOptions, state]);
+  }, [audioUnlocked, activeTeamName, correctOptionIndex, current?.question?.id, current?.question?.text, current?.selectedOptionIndex, playSequence, pushHostLine, questionOptions, state]);
 
   useEffect(() => {
-    if (countdown !== 10 || !current?.question?.text) {
+    if (!audioUnlocked || countdown !== 10 || !current?.question?.text) {
       return;
     }
 
@@ -298,10 +313,26 @@ export default function DisplayPage() {
     announcedTenSecondRef.current = questionId;
     pushHostLine('10 seconds remaining.');
     void speak('10 seconds remaining.');
-  }, [countdown, current?.question?.id, current?.question?.text, pushHostLine, speak]);
+  }, [audioUnlocked, countdown, current?.question?.id, current?.question?.text, pushHostLine, speak]);
 
   return (
     <section className="fixed inset-0 overflow-y-auto bg-slate-950 p-8 text-slate-100 lg:p-14">
+      {/* Audio Unlock Overlay — required by browsers before any audio can play */}
+      {!audioUnlocked && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm cursor-pointer"
+          onClick={handleUnlockAudio}
+        >
+          <div className="text-center space-y-6 max-w-sm">
+            <div className="text-7xl animate-pulse">🔊</div>
+            <h2 className="text-3xl font-bold text-white">Click to Enable Audio</h2>
+            <p className="text-slate-400 text-lg">Tap anywhere to activate voice announcements for this quiz session.</p>
+            <div className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-10 rounded-2xl text-xl transition-all transform hover:scale-105 shadow-xl shadow-indigo-900/40">
+              ▶ Start Audio
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300">
@@ -310,8 +341,8 @@ export default function DisplayPage() {
           <div className="flex gap-2">
             {current?.mode && (
               <div className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase ${current.mode === 'BUZZER'
-                  ? 'border-pink-500/40 bg-pink-500/10 text-pink-300'
-                  : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300'
+                ? 'border-pink-500/40 bg-pink-500/10 text-pink-300'
+                : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300'
                 }`}>
                 {current.mode} MODE
               </div>
@@ -364,27 +395,27 @@ export default function DisplayPage() {
           </div>
 
           <div className="xl:col-span-3">
-          <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
-            {current?.question?.text ?? 'Waiting for question...'}
-          </h2>
+            <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
+              {current?.question?.text ?? 'Waiting for question...'}
+            </h2>
 
-          <ul className="mt-8 grid gap-4 lg:grid-cols-2">
-            {questionOptions.map((option, index) => {
-              const isCorrect = state === 'REVEALED' && correctOptionIndex === index;
-              return (
-                <li
-                  key={`${index}-${option.key}-${option.text}`}
-                  className={`rounded-xl border px-5 py-4 text-2xl font-semibold lg:text-3xl ${isCorrect
-                    ? 'border-emerald-300 bg-emerald-400/20 text-emerald-100'
-                    : 'border-slate-700 bg-slate-800/70 text-slate-100'
-                    }`}
-                >
-                  <span className="mr-3 text-slate-400">{option.key}.</span>
-                  {option.text}
-                </li>
-              );
-            })}
-          </ul>
+            <ul className="mt-8 grid gap-4 lg:grid-cols-2">
+              {questionOptions.map((option, index) => {
+                const isCorrect = state === 'REVEALED' && correctOptionIndex === index;
+                return (
+                  <li
+                    key={`${index}-${option.key}-${option.text}`}
+                    className={`rounded-xl border px-5 py-4 text-2xl font-semibold lg:text-3xl ${isCorrect
+                      ? 'border-emerald-300 bg-emerald-400/20 text-emerald-100'
+                      : 'border-slate-700 bg-slate-800/70 text-slate-100'
+                      }`}
+                  >
+                    <span className="mr-3 text-slate-400">{option.key}.</span>
+                    {option.text}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </div>
 

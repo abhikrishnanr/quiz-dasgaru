@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getJson } from "@/src/lib/api/http";
+import { formatTeamName } from "@/src/lib/format";
 
 interface LiveAnswersPreviewProps {
     sessionId: string;
@@ -53,7 +54,7 @@ export function LiveAnswersPreview({ sessionId }: LiveAnswersPreviewProps) {
                 {recent.map((ans, idx) => (
                     <li key={idx} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                         <div className="flex flex-col gap-1">
-                            <span className="text-xs font-bold text-slate-800">{ans.teamId}</span>
+                            <span className="text-xs font-bold text-slate-800">{formatTeamName(ans.teamId)}</span>
                             <span className="text-[10px] text-slate-400 font-mono">Q{ans.questionId.split('-').pop()?.slice(-4)}...</span>
                         </div>
 
