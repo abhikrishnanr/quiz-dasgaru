@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useAudioController } from '@/src/hooks/useAudioController';
 import AIHostAvatar from '@/src/components/AIHostAvatar';
+import { formatTeamName } from '@/src/lib/format';
 
 export default function DisplayPage() {
   const params = useParams();
@@ -14,10 +15,19 @@ export default function DisplayPage() {
   const [error, setError] = useState('');
   const [errorPayload, setErrorPayload] = useState<any>(null);
   const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
-  const [isTestAudioRunning, setIsTestAudioRunning] = useState(false);
+  const isAnnouncingRef = useRef(false);
   const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
-  const { speak, isFetching, isSpeaking } = useAudioController();
+  const { speak, isFetching, isSpeaking, unlock } = useAudioController();
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  const handleUnlockAudio = useCallback(async () => {
+    try {
+      await unlock();
+      console.log('[Display] Audio unlocked by user interaction.');
+    } catch { /* ignore */ }
+    setAudioUnlocked(true);
+  }, [unlock]);
 
   const pushHostLine = (line: string) => {
     const normalizedLine = line.trim();
@@ -75,6 +85,7 @@ export default function DisplayPage() {
   const duration = session?.timerDurationSec || 20;
 
   useEffect(() => {
+    if (!audioUnlocked) return; // Wait for user gesture
     if (!currentQuestion || !session) {
       return;
     }
@@ -84,14 +95,19 @@ export default function DisplayPage() {
       return;
     }
 
-    // Use questionId AND concernTeamId as the unique key.
-    // This ensures audio plays if the question changes OR if the target team changes (correction/re-activation).
-    const questionKey = `${currentQuestion.id}-${session.concernTeamId || 'all'}`;
+    // Use questionId, text, AND concernTeamId as the unique key.
+    // Fall back to text if id is undefined (prevents all questions sharing the same key).
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId || 'all'}`;
     if (questionKey === lastAnnouncedQuestionKey) {
       return;
     }
 
-    const teamName = session.concernTeamName || 'all teams';
+    // Prevent overlapping announcements if one is already in progress
+    if (isAnnouncingRef.current) {
+      return;
+    }
+
+    const teamName = formatTeamName(session.concernTeamName) || 'all teams';
     const optionSpeech = Array.isArray(currentQuestion.options)
       ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
       : '';
@@ -99,25 +115,42 @@ export default function DisplayPage() {
     const intro = `Question is for ${teamName}.`;
     const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
-    setLastAnnouncedQuestionKey(questionKey);
-    pushHostLine(message);
-    void speak(message).then((played) => {
-      console.info('[Display TTS] Auto announcement played:', played);
+    isAnnouncingRef.current = true;
+    speak(message).then((played) => {
+      isAnnouncingRef.current = false;
+      if (played) {
+        setLastAnnouncedQuestionKey(questionKey);
+        pushHostLine(message);
+        console.info('[Display TTS] Auto announcement success:', questionKey);
+      } else {
+        console.warn('[Display TTS] Announcement failed/skipped — will retry on next poll:', questionKey);
+      }
     });
-  }, [currentQuestion, duration, lastAnnouncedQuestionKey, session, speak]);
 
-  const runTestAudio = async () => {
-    const sampleText = 'Audio test sample. If you can hear this, TTS playback is working on the display page.';
-    setIsTestAudioRunning(true);
+  }, [audioUnlocked, currentQuestion, duration, lastAnnouncedQuestionKey, session, speak, pushHostLine]);
+
+  // Report audio status to the server so admin page can show progress
+  const sessionId = data?.session?.sessionId;
+  const reportAudioStatus = useCallback(async (status: string, message: string) => {
+    if (!sessionId) return;
     try {
-      const played = await speak(sampleText);
-      console.info('[Display TTS] Sample test button result:', played);
-    } catch (error) {
-      console.error('[Display TTS] Sample test button failed:', error);
-    } finally {
-      setIsTestAudioRunning(false);
+      await fetch('/api/audio-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, status, message }),
+      });
+    } catch { /* ignore */ }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (isFetching && !isSpeaking) {
+      reportAudioStatus('FETCHING', 'Generating audio from Gemini TTS…');
+    } else if (isSpeaking) {
+      reportAudioStatus('SPEAKING', 'AI Host is speaking…');
+    } else {
+      reportAudioStatus('IDLE', '');
     }
-  };
+  }, [isFetching, isSpeaking, reportAudioStatus]);
 
   if (loading && !data && !error) {
     return (
@@ -244,6 +277,31 @@ export default function DisplayPage() {
 
   return (
     <div className="display-scope relative min-h-screen w-full overflow-hidden bg-[#071027] text-white">
+      {/* ─── Audio Unlock Overlay ─── */}
+      {!audioUnlocked && (
+        <div
+          className="absolute inset-0 z-[99] flex flex-col items-center justify-center cursor-pointer"
+          onClick={handleUnlockAudio}
+          style={{ background: 'rgba(7,16,39,0.96)', backdropFilter: 'blur(8px)' }}
+        >
+          {/* stardust behind the card */}
+          <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:radial-gradient(1.5px_1.5px_at_30px_40px,rgba(255,255,255,0.85),transparent),radial-gradient(1px_1px_at_110px_110px,rgba(103,232,249,0.9),transparent)] [background-size:170px_170px] animate-[stardustDrift_58s_linear_infinite_reverse]" />
+          <div className="relative text-center space-y-8 max-w-md px-8">
+            <div className="text-[80px] leading-none drop-shadow-[0_0_40px_rgba(90,220,255,0.35)] animate-pulse">🔊</div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/45 mb-3">DUK Bodhini Quiz</div>
+              <h2 className="text-4xl font-black tracking-tight text-white">Tap to Enable Audio</h2>
+              <p className="mt-3 text-white/55 text-base font-medium">One-time activation required by your browser to allow voice announcements.</p>
+            </div>
+            <button
+              onClick={handleUnlockAudio}
+              className="inline-flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-white font-black py-5 px-12 rounded-full text-lg transition-all transform hover:scale-105 shadow-[0_0_60px_rgba(90,220,255,0.30)]"
+            >
+              <span className="text-2xl">▶</span> Start Audio
+            </button>
+          </div>
+        </div>
+      )}
       {/* FULL-PAGE Stardust + Nebula (higher contrast) */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[#071027]" />
@@ -300,9 +358,8 @@ export default function DisplayPage() {
 
       {/* SCORE PANEL (logic unchanged, styling tuned to match HUD) */}
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-3xl border-l border-white/10 bg-[#071027]/92 backdrop-blur-2xl shadow-[0_0_120px_rgba(90,220,255,0.10)] transform transition-transform duration-300 ${
-          isScorePanelOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed inset-y-0 right-0 z-50 w-full max-w-3xl border-l border-white/10 bg-[#071027]/92 backdrop-blur-2xl shadow-[0_0_120px_rgba(90,220,255,0.10)] transform transition-transform duration-300 ${isScorePanelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="h-full overflow-y-auto p-6 lg:p-8 space-y-6">
           <div className="flex items-center justify-between">
@@ -333,7 +390,7 @@ export default function DisplayPage() {
                     <tr key={index} className="transition-all duration-300 hover:bg-white/6">
                       <td className="px-6 py-5 text-center font-mono font-black text-white/55">{index + 1}</td>
                       <td className="px-6 py-5">
-                        <div className="font-black text-white text-lg md:text-xl tracking-tight">{team.name}</div>
+                        <div className="font-black text-white text-lg md:text-xl tracking-tight">{formatTeamName(team.name)}</div>
                       </td>
                       <td className="px-6 py-5 text-right font-mono text-white/65 text-lg">{team.standard}</td>
                       <td className="px-6 py-5 text-right font-mono text-white/65 text-lg">{team.buzzer}</td>
@@ -453,7 +510,7 @@ export default function DisplayPage() {
                   >
                     <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center">👤</div>
                     <div className="min-w-[150px]">
-                      <div className="font-black text-white/90 truncate">{ans.teamName}</div>
+                      <div className="font-black text-white/90 truncate">{formatTeamName(ans.teamName)}</div>
                       <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
                         {ans.action === 'PASS' ? 'PASS' : ans.action === 'BUZZ' ? 'BUZZ' : `OPT ${ans.selectedKey}`}
                       </div>
@@ -522,6 +579,20 @@ export default function DisplayPage() {
         /* Hide scrollbar */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Audio status bar animations */
+        @keyframes audioBar1 {
+          0%, 100% { height: 10px; }
+          50% { height: 18px; }
+        }
+        @keyframes audioBar2 {
+          0%, 100% { height: 16px; }
+          50% { height: 8px; }
+        }
+        @keyframes audioBar3 {
+          0%, 100% { height: 8px; }
+          50% { height: 14px; }
+        }
 
         /* Local reset: prevents app-wide layout/typography bleed */
         .display-scope {

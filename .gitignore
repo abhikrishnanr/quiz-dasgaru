@@ -31,3 +31,9 @@ next-env.d.ts
 # build output
 /production_bundle/
 /lint_output.txt
+
+# local env
+.env
+
+# tts cache
+.tts-cache/

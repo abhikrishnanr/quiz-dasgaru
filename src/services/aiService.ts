@@ -2,7 +2,11 @@
 
 import { GoogleGenAI } from '@google/genai';
 
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const API_KEYS = [
+  process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+  process.env.NEXT_PUBLIC_GEMINI_API_KEY_2,
+].filter((k): k is string => !!k?.trim());
+
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
@@ -14,7 +18,27 @@ export type TTSAudioPayload = {
 };
 
 const inMemoryTTSCache = new Map<string, TTSAudioPayload>();
-const aiClient = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
+
+// --- Multi-key failover ---
+let activeKeyIndex = 0;
+const aiClients: GoogleGenAI[] = API_KEYS.map((key) => new GoogleGenAI({ apiKey: key }));
+
+function getActiveClient(): GoogleGenAI | null {
+  return aiClients[activeKeyIndex] ?? null;
+}
+
+function rotateToNextKey(): boolean {
+  const nextIndex = activeKeyIndex + 1;
+  if (nextIndex < aiClients.length) {
+    activeKeyIndex = nextIndex;
+    console.warn(
+      `${GEMINI_LOG_PREFIX} Rotated to API key #${nextIndex + 1} of ${aiClients.length}.`,
+    );
+    return true;
+  }
+  console.error(`${GEMINI_LOG_PREFIX} All ${aiClients.length} API keys exhausted.`);
+  return false;
+}
 
 function logGeminiInfo(message: string, payload?: unknown): void {
   if (payload === undefined) {
@@ -114,62 +138,47 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
     return localCached;
   }
 
-  if (!aiClient) {
-    logGeminiError('TTS failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
-    return undefined;
-  }
-
+  // Try fetching from server-side TTS API (which handles caching & failover)
   try {
-    logGeminiInfo('TTS request started.', {
-      model: TTS_MODEL,
-      textPreview: text.slice(0, 120),
-      textLength: text.length,
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voiceName: 'Kore' }), // 'Kore' is Female
     });
 
-    const response = await aiClient.models.generateContent({
-      model: TTS_MODEL,
-      contents: text,
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: 'Kore',
-            },
-          },
-        },
-      },
-    });
-
-    const audioPayload = extractAudioData(response);
-    if (!audioPayload?.data) {
-      logGeminiError('TTS response failed: no audio content in Gemini response.', {
-        model: TTS_MODEL,
-        status: 'fail',
-        response,
-      });
+    if (!res.ok) {
+      if (res.status === 503) {
+        console.warn(`[AI Service] TTS rate-limited — will retry on next call.`);
+      } else {
+        console.error(`[AI Service] TTS API Error: ${res.status} ${res.statusText}`);
+      }
       return undefined;
     }
 
-    logGeminiInfo('TTS response success.', {
-      model: TTS_MODEL,
-      status: 'pass',
-      audioBytesBase64Length: audioPayload.data.length,
-      mimeType: audioPayload.mimeType,
-      textPreview: text.slice(0, 120),
+    const mimeType = 'audio/wav'; // Server converts PCM -> WAV
+    const blob = await res.blob();
+    // Convert Blob -> Base64 for compatibility with existing player
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        // Remove data:...;base64, prefix
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
     });
 
-    inMemoryTTSCache.set(text, audioPayload);
-    writeToLocalStorageCache(text, audioPayload);
-    return audioPayload;
-  } catch (error) {
-    logGeminiError('TTS request failed.', {
-      model: TTS_MODEL,
-      status: 'fail',
-      textPreview: text.slice(0, 120),
-      error,
-    });
+    const payload: TTSAudioPayload = { mimeType, data: base64Data };
 
+    logGeminiInfo('TTS fetched from server API.', { textLength: text.length });
+    inMemoryTTSCache.set(text, payload);
+    writeToLocalStorageCache(text, payload);
+    return payload;
+
+  } catch (err) {
+    console.error('[AI Service] TTS fetch failed:', err);
     return undefined;
   }
 }
@@ -179,61 +188,73 @@ export async function generateCommentary(
   isCorrect: boolean,
   points: number,
 ): Promise<string | undefined> {
-  if (!aiClient) {
-    logGeminiError('Commentary failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
-    return undefined;
-  }
+  // Try each API key until one succeeds
+  for (let attempt = 0; attempt < aiClients.length; attempt++) {
+    const client = getActiveClient();
+    if (!client) {
+      logGeminiError('Commentary failed: No Gemini API keys configured.');
+      return undefined;
+    }
 
-  try {
-    const prompt = `Write one witty, family-friendly sentence for a live quiz host. Team: ${teamName}. Outcome: ${isCorrect ? 'correct answer' : 'wrong answer'}. Points: ${points}. Keep it under 18 words.`;
+    try {
+      const prompt = `Write one witty, family-friendly sentence for a live quiz host. Team: ${teamName}. Outcome: ${isCorrect ? 'correct answer' : 'wrong answer'}. Points: ${points}. Keep it under 18 words.`;
 
-    logGeminiInfo('Commentary request started.', {
-      model: TEXT_MODEL,
-      teamName,
-      isCorrect,
-      points,
-      prompt,
-    });
+      logGeminiInfo('Commentary request started.', {
+        model: TEXT_MODEL,
+        keyIndex: activeKeyIndex + 1,
+        totalKeys: aiClients.length,
+        teamName,
+        isCorrect,
+        points,
+        prompt,
+      });
 
-    const response = await aiClient.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-    });
+      const response = await client.models.generateContent({
+        model: TEXT_MODEL,
+        contents: prompt,
+      });
 
-    const text = response.text?.trim();
-    if (!text) {
-      logGeminiError('Commentary response failed: empty text.', {
+      const text = response.text?.trim();
+      if (!text) {
+        logGeminiError('Commentary response failed: empty text.', {
+          model: TEXT_MODEL,
+          status: 'fail',
+          teamName,
+          isCorrect,
+          points,
+          response,
+        });
+
+        return undefined;
+      }
+
+      logGeminiInfo('Commentary response success.', {
+        model: TEXT_MODEL,
+        status: 'pass',
+        keyIndex: activeKeyIndex + 1,
+        content: text,
+        teamName,
+        isCorrect,
+        points,
+      });
+
+      return text || undefined;
+    } catch (error) {
+      logGeminiError(`Commentary request failed (key #${activeKeyIndex + 1}).`, {
         model: TEXT_MODEL,
         status: 'fail',
         teamName,
         isCorrect,
         points,
-        response,
+        error,
       });
 
-      return undefined;
+      // Try next key if available
+      if (!rotateToNextKey()) {
+        return undefined; // All keys exhausted
+      }
     }
-
-    logGeminiInfo('Commentary response success.', {
-      model: TEXT_MODEL,
-      status: 'pass',
-      content: text,
-      teamName,
-      isCorrect,
-      points,
-    });
-
-    return text || undefined;
-  } catch (error) {
-    logGeminiError('Commentary request failed.', {
-      model: TEXT_MODEL,
-      status: 'fail',
-      teamName,
-      isCorrect,
-      points,
-      error,
-    });
-
-    return undefined;
   }
+
+  return undefined;
 }

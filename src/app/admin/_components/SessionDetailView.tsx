@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { AdminSessionDetails, AdminTab } from "../types";
 import { getJson, postJson, deleteJson } from "@/src/lib/api/http";
 import { AdminTabs } from "./AdminTabs";
 import { SessionSettings } from "./SessionSettings";
 import { AnswersView } from "./AnswersView";
 import { emitToast } from "@/src/lib/ui/toast";
+import { getTTSAudio } from "@/src/services/aiService";
+import { formatTeamName } from "@/src/lib/format";
 
 // Placeholder for Controls component which we will extract next
 import { SessionControls } from "./SessionControls";
@@ -59,6 +61,30 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
         const interval = setInterval(fetchDetails, isLive ? 1000 : 3000);
         return () => clearInterval(interval);
     }, [sessionId, details?.session?.questionState]);
+
+    // Audio Prefetching (Cache Warm-up)
+    const prefetchedSet = useRef(new Set<string>());
+    useEffect(() => {
+        if (!details?.questions) return;
+
+        const warmUpAudio = async () => {
+            for (const q of details.questions) {
+                // Only prefetch if we haven't already
+                if (prefetchedSet.current.has(q.questionId)) continue;
+                if (!q.questionText) continue;
+
+                prefetchedSet.current.add(q.questionId);
+
+                // Fire and forget (with small delay to be nice to network)
+                getTTSAudio(q.questionText).catch(err => console.warn('Prefetch skip:', err));
+                await new Promise(r => setTimeout(r, 300));
+            }
+        };
+
+        // Start warming up after initial render
+        const timer = setTimeout(warmUpAudio, 1000);
+        return () => clearTimeout(timer);
+    }, [details?.questions]);
 
     const handleDeleteQuestion = async (questionId: string) => {
         if (!confirm("Are you sure you want to delete this question?")) return;
@@ -553,7 +579,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
                                             {newTeams.map((t, idx) => (
                                                 <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-emerald-200 shadow-sm">
-                                                    <span className="text-sm font-bold text-slate-700">{t.name}</span>
+                                                    <span className="text-sm font-bold text-slate-700">{formatTeamName(t.name)}</span>
                                                     <button
                                                         onClick={() => {
                                                             navigator.clipboard.writeText(t.link);
@@ -574,7 +600,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                                         <li key={team.teamId} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                                             <div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-sm font-bold text-slate-900">{team.teamName}</span>
+                                                    <span className="text-sm font-bold text-slate-900">{formatTeamName(team.teamName)}</span>
                                                     <span className={`w-2 h-2 rounded-full ${team.isConnected ? 'bg-green-500' : 'bg-slate-300'}`} title={team.isConnected ? 'Connected' : 'Offline'}></span>
                                                     {team.status === 'OFFLINE' && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">Disabled</span>}
                                                 </div>

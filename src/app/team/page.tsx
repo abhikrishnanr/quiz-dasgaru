@@ -6,6 +6,7 @@ import { publicApi } from '@/src/lib/api/public';
 import { team } from '@/src/lib/api/team';
 import { normalizeSessionId } from '@/src/lib/session-id';
 import { emitToast } from '@/src/lib/ui/toast';
+import { formatTeamName } from '@/src/lib/format';
 import { useQuizTimer } from './hooks/useQuizTimer';
 import { RegistrationForm } from './_components/RegistrationForm';
 import { QuizView } from './_components/QuizView';
@@ -160,7 +161,7 @@ function TeamContent() {
         setTeamId(response.teamId);
         setTeamSecret(response.teamSecret);
         sessionStorage.setItem(TEAM_SESSION_KEY, JSON.stringify(response));
-        emitToast({ level: 'success', title: 'Registered!', message: `Welcome, ${data.teamName}` });
+        emitToast({ level: 'success', title: 'Registered!', message: `Welcome, ${formatTeamName(data.teamName)}` });
       } else {
         throw new Error('Invalid response from server');
       }

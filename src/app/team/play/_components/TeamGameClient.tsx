@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { useGameSounds } from '@/src/hooks/useGameSounds';
+import { formatTeamName } from '@/src/lib/format';
 
 interface TeamAuth {
     teamId: string;
@@ -280,7 +281,7 @@ export function TeamGameClient() {
         <div className="min-h-screen bg-slate-900 text-white flex flex-col">
             <header className="border-b border-slate-800 p-4 flex justify-between items-center bg-slate-900/50 backdrop-blur sticky top-0 z-10">
                 <div>
-                    <h1 className="font-bold text-lg">{auth?.teamName}</h1>
+                    <h1 className="font-bold text-lg">{formatTeamName(auth?.teamName)}</h1>
                     <div className="flex flex-col text-xs text-slate-400 font-mono">
                         <span>ID: {auth?.teamId}</span>
                         <span className="text-indigo-400 font-bold">{gameMode} MODE</span>
