@@ -2,9 +2,9 @@
 
 import { GoogleGenAI } from '@google/genai';
 
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const TEXT_MODEL = 'gemini-2.5-flash';
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const TTS_MODEL = 'gemini-3.0-flash';
+const TEXT_MODEL = 'gemini-3.0-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
 
@@ -115,7 +115,7 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
   }
 
   if (!aiClient) {
-    logGeminiError('TTS failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
+    logGeminiError('TTS failed: Gemini client unavailable. Check NEXT_PUBLIC_GOOGLE_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY).');
     return undefined;
   }
 
@@ -180,7 +180,7 @@ export async function generateCommentary(
   points: number,
 ): Promise<string | undefined> {
   if (!aiClient) {
-    logGeminiError('Commentary failed: Gemini client unavailable. Check NEXT_PUBLIC_GEMINI_API_KEY.');
+    logGeminiError('Commentary failed: Gemini client unavailable. Check NEXT_PUBLIC_GOOGLE_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY).');
     return undefined;
   }
 

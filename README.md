@@ -43,6 +43,8 @@ Define these in `.env.local`:
 
 - `NEXT_PUBLIC_API_BASE_URL` - Base URL for the quiz API.
 - `NEXT_PUBLIC_APP_NAME` - Optional display name for the frontend.
+- `NEXT_PUBLIC_GOOGLE_API_KEY` - Google AI Studio API key (paid billing account recommended for production).
+- `NEXT_PUBLIC_GEMINI_API_KEY` - Backward-compatible fallback key name.
 
 See `.env.example` for defaults.
 
