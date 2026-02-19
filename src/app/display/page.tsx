@@ -333,36 +333,39 @@ export default function DisplayPage() {
           </div>
         )}
 
-        <div className="grid gap-8 rounded-2xl border border-slate-700/70 bg-slate-900/55 p-8 backdrop-blur-sm xl:grid-cols-4">
-          <div className="order-2 xl:order-1 xl:col-span-1">
-            <div className="sticky top-8 mx-auto w-full max-w-sm">
+        <div className="grid gap-6 rounded-2xl border border-slate-700/70 bg-slate-900/55 p-6 backdrop-blur-sm lg:p-8 xl:grid-cols-[minmax(20rem,24rem),1fr]">
+          <div className="rounded-2xl border border-cyan-400/40 bg-gradient-to-b from-cyan-500/10 to-slate-900/70 p-5 shadow-[0_0_60px_rgba(34,211,238,0.15)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200/80">Live Host</p>
+            <div className="mt-4 flex min-h-[18rem] items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/70 p-4">
               <AIHostAvatar isSpeaking={isSpeaking} size="xl" />
-              <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
             </div>
+            <p className="mt-4 text-center text-base font-medium text-cyan-100">
+              AI Host is {isSpeaking ? 'speaking now' : 'standing by'}
+            </p>
           </div>
 
-          <div className="order-1 xl:order-2 xl:col-span-3">
-          <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
-            {current?.question?.text ?? 'Waiting for question...'}
-          </h2>
+          <div>
+            <h2 className="text-3xl font-bold leading-tight lg:text-5xl 2xl:text-6xl">
+              {current?.question?.text ?? 'Waiting for question...'}
+            </h2>
 
-          <ul className="mt-8 grid gap-4 lg:grid-cols-2">
-            {questionOptions.map((option, index) => {
-              const isCorrect = state === 'REVEALED' && correctOptionIndex === index;
-              return (
-                <li
-                  key={`${index}-${option.key}-${option.text}`}
-                  className={`rounded-xl border px-5 py-4 text-2xl font-semibold lg:text-3xl ${isCorrect
-                    ? 'border-emerald-300 bg-emerald-400/20 text-emerald-100'
-                    : 'border-slate-700 bg-slate-800/70 text-slate-100'
-                    }`}
-                >
-                  <span className="mr-3 text-slate-400">{option.key}.</span>
-                  {option.text}
-                </li>
-              );
-            })}
-          </ul>
+            <ul className="mt-8 grid gap-4 lg:grid-cols-2">
+              {questionOptions.map((option, index) => {
+                const isCorrect = state === 'REVEALED' && correctOptionIndex === index;
+                return (
+                  <li
+                    key={`${index}-${option.key}-${option.text}`}
+                    className={`rounded-xl border px-5 py-4 text-xl font-semibold lg:text-2xl 2xl:text-3xl ${isCorrect
+                      ? 'border-emerald-300 bg-emerald-400/20 text-emerald-100'
+                      : 'border-slate-700 bg-slate-800/70 text-slate-100'
+                      }`}
+                  >
+                    <span className="mr-3 text-slate-400">{option.key}.</span>
+                    {option.text}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </div>
 
