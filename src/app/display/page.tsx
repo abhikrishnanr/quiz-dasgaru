@@ -347,7 +347,7 @@ export default function DisplayPage() {
 
         <div className="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-8 xl:grid-cols-4">
           <div className="xl:col-span-1">
-            <AIHostAvatar isSpeaking={isSpeaking} size="h-80 w-full" />
+            <AIHostAvatar isSpeaking={isSpeaking} size="lg" />
             <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
 
             <div className="mt-4 rounded-xl border border-cyan-500/30 bg-slate-950/70 p-4">

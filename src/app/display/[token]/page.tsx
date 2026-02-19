@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAudioController } from '@/src/hooks/useAudioController';
 import AIHostAvatar from '@/src/components/AIHostAvatar';
+import DisplayBackgroundFX from '@/src/components/DisplayBackgroundFX';
 
 export default function DisplayPage() {
     const params = useParams();
@@ -96,7 +97,7 @@ export default function DisplayPage() {
             ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
             : '';
 
-        const intro = `Question is for ${teamName}. Countdown starts at ${duration} seconds.`;
+        const intro = `Question is for ${teamName}.`;
         const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
         setLastAnnouncedQuestionKey(questionKey);
@@ -183,9 +184,12 @@ export default function DisplayPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0f172a] text-white font-sans selection:bg-indigo-500/30">
+        <div className="relative min-h-screen overflow-hidden bg-[#020720] text-white font-sans selection:bg-indigo-500/30">
+            <DisplayBackgroundFX />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(56,189,248,0.09),transparent_32%,rgba(99,102,241,0.08),transparent_70%)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,rgba(59,130,246,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(59,130,246,0.08)_1px,transparent_1px)] [background-size:84px_84px]" />
             {/* Header */}
-            <header className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 sticky top-0 z-20">
+            <header className="relative bg-[#060d2a]/80 backdrop-blur-md border-b border-indigo-400/20 sticky top-0 z-20">
                 <div className="max-w-[1920px] mx-auto px-6 py-4 flex justify-between items-center relative">
                     {/* Left Logo - Absolute positioned or flex depending on preference */}
                     <div className="flex items-center gap-4">
@@ -346,7 +350,7 @@ export default function DisplayPage() {
             )}
 
             {/* Main Content Grid */}
-            <main className="max-w-[1920px] mx-auto p-6 lg:p-10">
+            <main className="relative z-10 max-w-[1920px] mx-auto p-6 lg:p-10">
 
                 {/* Live Data */}
                 <div className="space-y-10">
@@ -359,13 +363,12 @@ export default function DisplayPage() {
                         </div>
 
                         {currentQuestion ? (
-                            <div className="bg-indigo-600 rounded-[2rem] p-8 shadow-[0_20px_50px_rgba(79,70,229,0.3)] border border-white/10 relative overflow-hidden">
-                                {/* Decor */}
-                                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                            <div className="rounded-[2.25rem] p-8 md:p-10 shadow-[0_20px_120px_rgba(10,20,70,0.5)] border border-indigo-400/50 relative overflow-hidden bg-[#0a1238]/75 backdrop-blur-xl">
+                                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(99,102,241,0.15),transparent_38%,rgba(56,189,248,0.1),transparent_75%)]" />
 
                                 <div className="relative z-10 grid gap-6 xl:grid-cols-4">
                                     <div className="xl:col-span-1">
-                                        <AIHostAvatar isSpeaking={isSpeaking} size="h-64 w-full" />
+                                        <AIHostAvatar isSpeaking={isSpeaking} size="lg" />
                                         <p className="mt-2 text-center text-xs font-semibold uppercase tracking-wide text-indigo-100/80">
                                             AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}
                                         </p>
@@ -388,16 +391,12 @@ export default function DisplayPage() {
                                     </div>
 
                                     <div className="xl:col-span-3 space-y-6">
-                                        <div className="bg-white/15 border border-white/25 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                                        <div className="bg-[#091131]/80 border border-indigo-300/30 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
                                             <div>
                                                 <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Question For Team</div>
-                                                <div className="text-2xl font-black tracking-tight text-white italic">
+                                                <div className="text-3xl font-black tracking-tight text-white italic drop-shadow-[0_0_15px_rgba(125,211,252,0.35)] animate-[pulse_5s_ease-in-out_infinite]">
                                                     {session.concernTeamName || 'All Teams'}
                                                 </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">Countdown</div>
-                                                <div className="text-3xl font-mono font-black text-white">{isLive ? `${remaining}s` : `${duration}s`}</div>
                                             </div>
                                         </div>
 
@@ -425,25 +424,25 @@ export default function DisplayPage() {
                                             </div>
                                         </div>
 
-                                        <h3 className="text-3xl font-black leading-[1.1] tracking-tight text-white italic">
+                                        <h3 className="text-4xl lg:text-6xl font-black leading-[1.08] tracking-tight text-white">
                                             "{currentQuestion.text}"
                                         </h3>
 
-                                        <div className="grid grid-cols-1 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {currentQuestion.options.map((opt: any) => {
                                                 const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
                                                 return (
                                                     <div
                                                         key={opt.key}
-                                                        className={`px-5 py-3 rounded-2xl border transition-all duration-300 flex items-center gap-4 ${isCorrect
-                                                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-[1.02]'
-                                                            : 'bg-white/10 border-white/10 text-white/80'
+                                                        className={`px-5 py-4 rounded-2xl border transition-all duration-500 flex items-center gap-4 ${isCorrect
+                                                            ? 'bg-emerald-500/85 border-emerald-300 text-white shadow-[0_0_35px_rgba(16,185,129,0.55)] scale-[1.02]'
+                                                            : 'bg-[#091236]/85 border-indigo-300/20 text-white/95 hover:-translate-y-0.5 hover:border-indigo-300/45 hover:shadow-[0_0_35px_rgba(99,102,241,0.28)]'
                                                             }`}
                                                     >
-                                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${isCorrect ? 'bg-white text-emerald-600' : 'bg-white/20 text-white'}`}>
+                                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${isCorrect ? 'bg-white text-emerald-600' : 'bg-cyan-300/15 text-cyan-100 border border-cyan-200/20'}`}>
                                                             {opt.key}
                                                         </span>
-                                                        <span className="font-bold text-lg">{opt.text}</span>
+                                                        <span className="font-bold text-xl">{opt.text}</span>
                                                     </div>
                                                 );
                                             })}
@@ -509,6 +508,7 @@ export default function DisplayPage() {
 
                 </div>
             </main>
+
         </div>
     );
 }

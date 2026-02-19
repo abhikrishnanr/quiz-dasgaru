@@ -62,10 +62,10 @@ function WhiteCore({ isSpeaking, palette }: { isSpeaking: boolean; palette: Pale
     const t = clock.getElapsedTime();
 
     const pulse = isSpeaking
-      ? Math.sin(t * 20) * 0.1 + Math.cos(t * 40) * 0.05
-      : Math.sin(t * 1.5) * 0.02;
+      ? Math.sin(t * 6) * 0.08 + Math.cos(t * 12) * 0.03
+      : Math.sin(t * 1.2) * 0.02;
 
-    const emissiveIntensity = isSpeaking ? 4 + Math.sin(t * 25) * 2 : 3 + Math.sin(t * 2) * 1;
+    const emissiveIntensity = isSpeaking ? 4.4 + Math.sin(t * 8) * 1.2 : 3 + Math.sin(t * 2) * 0.7;
 
     const coreScale = 1 + pulse;
     const shellScale = coreScale * 1.6;
@@ -313,12 +313,12 @@ function ComplexOuterRig({ palette }: { palette: Palette }) {
       </mesh>
 
       {/* Dash rings */}
-      <DashRing radius={1.8} segments={32} plane={[0.05, 0.3]} speed={+0.05} color={palette.secondary} opacity={0.55} />
-      <DashRing radius={2.8} segments={80} plane={[0.02, 0.15]} speed={-0.02} color={palette.dot} opacity={0.45} />
+      <DashRing radius={1.8} segments={32} plane={[0.05, 0.3]} speed={+0.012} color={palette.secondary} opacity={0.55} />
+      <DashRing radius={2.8} segments={80} plane={[0.02, 0.15]} speed={-0.008} color={palette.dot} opacity={0.45} />
 
       {/* Dot rings */}
-      <DotRing radius={2.2} count={16} speed={-0.08} dotSize={0.06} color={palette.primary} opacity={0.7} />
-      <DotRing radius={1.2} count={8} speed={+0.15} dotSize={0.04} color={palette.secondary} opacity={0.8} />
+      <DotRing radius={2.2} count={16} speed={-0.01} dotSize={0.06} color={palette.primary} opacity={0.7} />
+      <DotRing radius={1.2} count={8} speed={+0.02} dotSize={0.04} color={palette.secondary} opacity={0.8} />
 
       {/* Orbital ring group A */}
       <group rotation={[0.4, 0.4, 0]}>
@@ -332,7 +332,7 @@ function ComplexOuterRig({ palette }: { palette: Palette }) {
             depthWrite={false}
           />
         </mesh>
-        <DotRing radius={3.2} count={4} speed={+0.05} dotSize={0.06} color={palette.white} opacity={0.45} />
+        <DotRing radius={3.2} count={4} speed={+0.008} dotSize={0.06} color={palette.white} opacity={0.45} />
       </group>
 
       {/* Orbital ring group B */}
@@ -347,7 +347,7 @@ function ComplexOuterRig({ palette }: { palette: Palette }) {
             depthWrite={false}
           />
         </mesh>
-        <DashRing radius={3.0} segments={12} plane={[0.06, 0.22]} speed={-0.03} color={palette.secondary} opacity={0.35} />
+        <DashRing radius={3.0} segments={12} plane={[0.06, 0.22]} speed={-0.006} color={palette.secondary} opacity={0.35} />
       </group>
     </group>
   );
