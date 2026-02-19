@@ -275,8 +275,28 @@ export default function DisplayPage() {
     (session?.questionState as string | undefined) ||
     'ROUND';
 
+  // Determine if concern team answered incorrectly
+  const concernTeamAnswer = session.concernTeamId
+    ? recentAnswers?.find((a: any) => a.teamId === session.concernTeamId)
+    : null;
+  const showWrongAnswer =
+    isRevealed &&
+    session.gameMode === 'STANDARD' &&
+    session.concernTeamId &&
+    concernTeamAnswer &&
+    concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
+
   return (
     <div className="display-scope relative min-h-screen w-full overflow-hidden bg-[#071027] text-white">
+      {/* ─── Wrong Answer Overlay ─── */}
+      {showWrongAnswer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none animate-in fade-in zoom-in duration-500">
+          <div className="bg-red-600/90 backdrop-blur-md border-y-8 border-red-400 text-white text-6xl md:text-8xl font-black uppercase tracking-widest px-20 py-16 shadow-[0_0_150px_rgba(220,38,38,0.8)] transform -rotate-2">
+            WRONG ANSWER
+          </div>
+        </div>
+      )}
+
       {/* ─── Audio Unlock Overlay ─── */}
       {!audioUnlocked && (
         <div
