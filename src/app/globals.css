@@ -13,3 +13,50 @@ body {
 .card {
   @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm;
 }
+
+.stardust-field,
+.stardust-layer {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+}
+
+.stardust-field {
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 120px 90px, rgba(147, 197, 253, 0.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 240px 150px, rgba(255, 255, 255, 0.4), transparent 65%);
+  background-size: 260px 220px;
+  animation: stardustDrift 90s linear infinite;
+  opacity: 0.65;
+}
+
+.stardust-layer {
+  mix-blend-mode: screen;
+  opacity: 0.45;
+}
+
+.stardust-layer--fast {
+  background-image:
+    radial-gradient(1px 1px at 40px 60px, rgba(191, 219, 254, 0.4), transparent 60%),
+    radial-gradient(1.5px 1.5px at 180px 140px, rgba(56, 189, 248, 0.35), transparent 65%);
+  background-size: 280px 240px;
+  animation: stardustDrift 55s linear infinite reverse;
+}
+
+.stardust-layer--slow {
+  background-image:
+    radial-gradient(2px 2px at 100px 80px, rgba(255, 255, 255, 0.35), transparent 70%),
+    radial-gradient(1px 1px at 260px 160px, rgba(14, 165, 233, 0.3), transparent 65%);
+  background-size: 340px 300px;
+  animation: stardustDrift 120s linear infinite;
+}
+
+@keyframes stardustDrift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-320px, -180px, 0) scale(1.1);
+  }
+}

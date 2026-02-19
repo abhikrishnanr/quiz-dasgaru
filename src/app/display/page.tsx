@@ -284,7 +284,13 @@ export default function DisplayPage() {
 
   return (
     <section className="fixed inset-0 overflow-y-auto bg-slate-950 p-8 text-slate-100 lg:p-14">
-      <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col gap-8">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="stardust-field" />
+        <div className="stardust-layer stardust-layer--fast" />
+        <div className="stardust-layer stardust-layer--slow" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.2)_0%,rgba(2,6,23,0.9)_85%)]" />
+      </div>
+      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[96rem] flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300">
             Session: <span className="font-semibold text-white">{sessionId || '—'}</span>
@@ -327,8 +333,15 @@ export default function DisplayPage() {
           </div>
         )}
 
-        <div className="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div>
+        <div className="grid gap-8 rounded-2xl border border-slate-700/70 bg-slate-900/55 p-8 backdrop-blur-sm xl:grid-cols-4">
+          <div className="order-2 xl:order-1 xl:col-span-1">
+            <div className="sticky top-8 mx-auto w-full max-w-sm">
+              <AIHostAvatar isSpeaking={isSpeaking} size="xl" />
+              <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
+            </div>
+          </div>
+
+          <div className="order-1 xl:order-2 xl:col-span-3">
           <h2 className="text-4xl font-bold leading-tight lg:text-6xl">
             {current?.question?.text ?? 'Waiting for question...'}
           </h2>
@@ -350,11 +363,6 @@ export default function DisplayPage() {
               );
             })}
           </ul>
-          </div>
-
-          <div className="mx-auto w-full max-w-80">
-            <AIHostAvatar isSpeaking={isSpeaking} size="h-80 w-full" />
-            <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
           </div>
         </div>
 
