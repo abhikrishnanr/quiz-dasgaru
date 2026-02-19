@@ -1,12 +1,9 @@
 'use client';
 
-import { GoogleGenAI } from '@google/genai';
-
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const TTS_MODEL = 'gemini-3.0-flash';
-const TEXT_MODEL = 'gemini-3.0-flash';
+const TTS_MODEL = 'gemini-2.5-flash-tts';
+const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
-const GEMINI_LOG_PREFIX = '[Gemini API]';
+const GEMINI_LOG_PREFIX = '[VoiceAgent]';
 
 export type TTSAudioPayload = {
   data: string;
@@ -14,7 +11,6 @@ export type TTSAudioPayload = {
 };
 
 const inMemoryTTSCache = new Map<string, TTSAudioPayload>();
-const aiClient = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
 function logGeminiInfo(message: string, payload?: unknown): void {
   if (payload === undefined) {
@@ -75,26 +71,6 @@ function writeToLocalStorageCache(text: string, payload: TTSAudioPayload): void 
   }
 }
 
-function extractAudioData(response: unknown): TTSAudioPayload | undefined {
-  if (!response || typeof response !== 'object') {
-    return undefined;
-  }
-
-  const typedResponse = response as {
-    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
-  };
-
-  const inlineData = typedResponse.candidates?.[0]?.content?.parts?.find((part) => part?.inlineData?.data)?.inlineData;
-  if (!inlineData?.data) {
-    return undefined;
-  }
-
-  return {
-    data: inlineData.data,
-    mimeType: inlineData.mimeType,
-  };
-}
-
 export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undefined> {
   if (!text.trim()) {
     logGeminiInfo('TTS skipped because text is empty.');
@@ -114,11 +90,6 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
     return localCached;
   }
 
-  if (!aiClient) {
-    logGeminiError('TTS failed: Gemini client unavailable. Check NEXT_PUBLIC_GOOGLE_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY).');
-    return undefined;
-  }
-
   try {
     logGeminiInfo('TTS request started.', {
       model: TTS_MODEL,
@@ -126,27 +97,23 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
       textLength: text.length,
     });
 
-    const response = await aiClient.models.generateContent({
-      model: TTS_MODEL,
-      contents: text,
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: 'Kore',
-            },
-          },
-        },
-      },
+    const response = await fetch('/api/ai/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
     });
 
-    const audioPayload = extractAudioData(response);
+    if (!response.ok) {
+      logGeminiError('TTS request failed.', { model: TTS_MODEL, status: 'fail', httpStatus: response.status });
+      return undefined;
+    }
+
+    const audioPayload = (await response.json()) as TTSAudioPayload;
+
     if (!audioPayload?.data) {
-      logGeminiError('TTS response failed: no audio content in Gemini response.', {
+      logGeminiError('TTS response failed: no audio content in API response.', {
         model: TTS_MODEL,
         status: 'fail',
-        response,
       });
       return undefined;
     }
@@ -179,11 +146,6 @@ export async function generateCommentary(
   isCorrect: boolean,
   points: number,
 ): Promise<string | undefined> {
-  if (!aiClient) {
-    logGeminiError('Commentary failed: Gemini client unavailable. Check NEXT_PUBLIC_GOOGLE_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY).');
-    return undefined;
-  }
-
   try {
     const prompt = `Write one witty, family-friendly sentence for a live quiz host. Team: ${teamName}. Outcome: ${isCorrect ? 'correct answer' : 'wrong answer'}. Points: ${points}. Keep it under 18 words.`;
 
@@ -195,12 +157,26 @@ export async function generateCommentary(
       prompt,
     });
 
-    const response = await aiClient.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
+    const response = await fetch('/api/ai/commentary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, teamName, isCorrect, points }),
     });
 
-    const text = response.text?.trim();
+    if (!response.ok) {
+      logGeminiError('Commentary request failed.', {
+        model: TEXT_MODEL,
+        status: 'fail',
+        teamName,
+        isCorrect,
+        points,
+        httpStatus: response.status,
+      });
+      return undefined;
+    }
+
+    const payload = (await response.json()) as { text?: string };
+    const text = payload.text?.trim();
     if (!text) {
       logGeminiError('Commentary response failed: empty text.', {
         model: TEXT_MODEL,
@@ -208,7 +184,6 @@ export async function generateCommentary(
         teamName,
         isCorrect,
         points,
-        response,
       });
 
       return undefined;
