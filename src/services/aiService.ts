@@ -143,7 +143,7 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceName: 'Kore' }), // 'Kore' is Female
+      body: JSON.stringify({ text, voiceName: 'Anjura' }),
     });
 
     if (!res.ok) {
@@ -155,7 +155,7 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
       return undefined;
     }
 
-    const mimeType = 'audio/wav'; // Server converts PCM -> WAV
+    const mimeType = res.headers.get('Content-Type') || 'audio/mpeg';
     const blob = await res.blob();
     // Convert Blob -> Base64 for compatibility with existing player
     const base64Data = await new Promise<string>((resolve, reject) => {

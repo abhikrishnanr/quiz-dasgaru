@@ -261,7 +261,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                         'text-slate-600'
                                 }`}>
                                 {audioStatus.status === 'SPEAKING' ? '🎙️ Audio is playing on display. Wait for it to finish.' :
-                                    audioStatus.status === 'FETCHING' ? '⏳ Generating voice from Gemini TTS… Please wait.' :
+                                    audioStatus.status === 'FETCHING' ? '⏳ Generating voice from ElevenLabs… Please wait.' :
                                         audioStatus.status === 'DONE' ? '✅ Audio finished. You can now proceed.' :
                                             '🔊 Display is preparing audio. Wait before clicking Start.'}
                             </p>
@@ -460,7 +460,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                             'text-slate-300/80'
                                     }`}>
                                     {audioStatus.status === 'SPEAKING' ? '🎙️ Audio is playing on display. Wait for it to finish.' :
-                                        audioStatus.status === 'FETCHING' ? '⏳ Generating voice from Gemini TTS… Please wait.' :
+                                        audioStatus.status === 'FETCHING' ? '⏳ Generating voice from ElevenLabs… Please wait.' :
                                             audioStatus.status === 'DONE' ? '✅ Audio finished. You can now proceed.' :
                                                 '🔊 Display is preparing audio. Wait before clicking Start.'}
                                 </p>
