@@ -33,6 +33,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
 
     // Live audio status polling from display page
     const [audioStatus, setAudioStatus] = useState<{ status: string; message: string; updatedAt: number }>({ status: 'IDLE', message: '', updatedAt: 0 });
+    const [scoreboardActionLoading, setScoreboardActionLoading] = useState(false);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -164,6 +165,23 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         emitToast({ level: 'success', title: 'Copied', message: 'Display Dashboard link copied!' });
     };
 
+    const triggerScoreboardOverlay = async (isOpen: boolean, stopAudio = false) => {
+        setScoreboardActionLoading(true);
+        try {
+            await postJson('/api/scoreboard-control', { sessionId, isOpen, stopAudio });
+            emitToast({
+                level: 'success',
+                title: isOpen ? 'Scoreboard Opened' : 'Scoreboard Closed',
+                message: isOpen
+                    ? 'Display scoreboard overlay is now active.'
+                    : (stopAudio ? 'Display scoreboard and audio have been stopped.' : 'Display scoreboard has been closed.'),
+            });
+        } catch (error: any) {
+            emitToast({ level: 'error', title: 'Scoreboard Action Failed', message: error?.message || 'Unable to update scoreboard overlay.' });
+        } finally {
+            setScoreboardActionLoading(false);
+        }
+    };
 
 
     if (variant === 'compact') {
@@ -217,6 +235,23 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                             </div>
                         </div>
                     )}
+                </div>
+
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-2.5 flex items-center gap-2">
+                    <button
+                        disabled={scoreboardActionLoading}
+                        onClick={() => triggerScoreboardOverlay(true)}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] px-3 py-2 rounded-lg font-black uppercase tracking-wide disabled:opacity-50"
+                    >
+                        Show Scoreboard
+                    </button>
+                    <button
+                        disabled={scoreboardActionLoading}
+                        onClick={() => triggerScoreboardOverlay(false, true)}
+                        className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-[11px] px-3 py-2 rounded-lg font-black uppercase tracking-wide disabled:opacity-50"
+                    >
+                        Close + Stop Audio
+                    </button>
                 </div>
 
                 {/* Audio Status Guide — Live Progress */}
@@ -417,6 +452,23 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                             </div>
                         </div>
                     )}
+
+                    <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/10 px-3 py-3 flex items-center gap-2">
+                        <button
+                            disabled={scoreboardActionLoading}
+                            onClick={() => triggerScoreboardOverlay(true)}
+                            className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] px-3 py-2 rounded-lg font-black uppercase tracking-wide disabled:opacity-50"
+                        >
+                            Show Scoreboard
+                        </button>
+                        <button
+                            disabled={scoreboardActionLoading}
+                            onClick={() => triggerScoreboardOverlay(false, true)}
+                            className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-[11px] px-3 py-2 rounded-lg font-black uppercase tracking-wide disabled:opacity-50"
+                        >
+                            Close + Stop Audio
+                        </button>
+                    </div>
 
                     {/* Audio Status Guide — Live Progress (default variant) */}
                     {!isLive && !isLocked && !isRevealed && initialState.currentQuestionId && (

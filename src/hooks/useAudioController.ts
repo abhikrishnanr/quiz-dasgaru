@@ -73,12 +73,22 @@ function decodeAsLikelyPCM16(context: AudioContext, arrayBuffer: ArrayBuffer): A
   return undefined;
 }
 
-async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Promise<void> {
+async function playAudioBuffer(
+  context: AudioContext,
+  buffer: AudioBuffer,
+  activeSourceRef: { current: AudioBufferSourceNode | null },
+): Promise<void> {
   await new Promise<void>((resolve) => {
     const source = context.createBufferSource();
+    activeSourceRef.current = source;
     source.buffer = buffer;
     source.connect(context.destination);
-    source.onended = () => resolve();
+    source.onended = () => {
+      if (activeSourceRef.current === source) {
+        activeSourceRef.current = null;
+      }
+      resolve();
+    };
     source.start();
   });
 }
@@ -86,6 +96,7 @@ async function playAudioBuffer(context: AudioContext, buffer: AudioBuffer): Prom
 export function useAudioController() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const initializedRef = useRef(false);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || initializedRef.current) {
@@ -203,7 +214,7 @@ export function useAudioController() {
             continue;
           }
 
-          await playAudioBuffer(context, buffer);
+          await playAudioBuffer(context, buffer, activeSourceRef);
           playedCount += 1;
           if (index < audios.length - 1) {
             await new Promise((resolve) => window.setTimeout(resolve, 300));
@@ -249,5 +260,19 @@ export function useAudioController() {
     [playSequence],
   );
 
-  return { isSpeaking, isFetching, playSequence, speak, unlock };
+  const stop = useCallback(() => {
+    try {
+      if (activeSourceRef.current) {
+        activeSourceRef.current.stop();
+        activeSourceRef.current.disconnect();
+        activeSourceRef.current = null;
+      }
+    } catch {
+      // noop
+    } finally {
+      setIsSpeaking(false);
+    }
+  }, []);
+
+  return { isSpeaking, isFetching, playSequence, speak, unlock, stop };
 }

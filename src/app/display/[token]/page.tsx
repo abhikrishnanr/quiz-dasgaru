@@ -22,10 +22,11 @@ export default function DisplayPage() {
   const lockAnnouncementKeyRef = useRef('');
   const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
-  const { speak, isFetching, isSpeaking, unlock } = useAudioController();
+  const { speak, isFetching, isSpeaking, unlock, stop } = useAudioController();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const welcomeAnnouncementPlayedRef = useRef(false);
   const [introOverlayDismissed, setIntroOverlayDismissed] = useState(false);
+  const lastScoreboardCommandNonceRef = useRef(0);
 
   const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
@@ -198,6 +199,35 @@ export default function DisplayPage() {
       reportAudioStatus('IDLE', '');
     }
   }, [isFetching, isSpeaking, reportAudioStatus]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const pollScoreboardCommand = async () => {
+      try {
+        const res = await fetch(`/api/scoreboard-control?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) return;
+
+        const command = await res.json();
+        const nonce = Number(command?.nonce ?? 0);
+        if (!nonce || nonce === lastScoreboardCommandNonceRef.current) return;
+
+        lastScoreboardCommandNonceRef.current = nonce;
+        setIsScorePanelOpen(Boolean(command?.isOpen));
+
+        if (command?.stopAudio) {
+          stop();
+          reportAudioStatus('IDLE', 'Scoreboard command stopped display audio.');
+        }
+      } catch {
+        // ignore scoreboard polling failures
+      }
+    };
+
+    pollScoreboardCommand();
+    const interval = setInterval(pollScoreboardCommand, 1000);
+    return () => clearInterval(interval);
+  }, [reportAudioStatus, sessionId, stop]);
 
   // Calc remaining time
   let remaining = 0;
@@ -543,63 +573,68 @@ export default function DisplayPage() {
         </div>
       )}
 
-      {/* SCORE PANEL (logic unchanged, styling tuned to match HUD) */}
-      <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-3xl border-l border-white/10 bg-[#071027]/92 backdrop-blur-2xl shadow-[0_0_120px_rgba(90,220,255,0.10)] transform transition-transform duration-300 ${isScorePanelOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-      >
-        <div className="h-full overflow-y-auto p-6 lg:p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl md:text-2xl font-black tracking-tight uppercase text-white/90">Score Panel</h2>
-            <button
-              type="button"
-              onClick={() => setIsScorePanelOpen(false)}
-              className="rounded-full border border-white/10 bg-white/6 px-5 py-2 text-[10px] font-black uppercase tracking-[0.32em] text-white/85 hover:bg-white/10 transition"
-            >
-              Close
-            </button>
-          </div>
+      {/* SCOREBOARD OVERLAY */}
+      {isScorePanelOpen && (
+        <div className="fixed inset-0 z-[70] bg-[#030712]/92 backdrop-blur-xl">
+          <div className="relative h-full w-full overflow-y-auto px-6 py-8 md:px-10 lg:px-16">
+            <div className="mx-auto w-full max-w-7xl">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-xl md:text-3xl lg:text-4xl font-black uppercase tracking-[0.16em] text-white animate-[scoreHeadingPulse_2.8s_ease-in-out_infinite] drop-shadow-[0_0_28px_rgba(103,232,249,0.45)]">
+                  Bodhini AI Quiz Scoreboard
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setIsScorePanelOpen(false)}
+                  className="rounded-full border border-white/20 bg-white/10 px-6 py-2 text-[10px] font-black uppercase tracking-[0.32em] text-white/90 hover:bg-white/20 transition"
+                >
+                  Close
+                </button>
+              </div>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 overflow-hidden backdrop-blur-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white/6 border-b border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/55 font-black">
-                    <th className="px-6 py-4 w-20 text-center">Rank</th>
-                    <th className="px-6 py-4">Team</th>
-                    <th className="px-6 py-4 text-right">Standard</th>
-                    <th className="px-6 py-4 text-right">Buzzer</th>
-                    <th className="px-6 py-4 text-right bg-cyan-200/5 text-cyan-100">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {leaderboard.map((team: any, index: number) => (
-                    <tr key={index} className="transition-all duration-300 hover:bg-white/6">
-                      <td className="px-6 py-5 text-center font-mono font-black text-white/55">{index + 1}</td>
-                      <td className="px-6 py-5">
-                        <div className="font-black text-white text-lg md:text-xl tracking-tight">{formatTeamName(team.name)}</div>
-                      </td>
-                      <td className="px-6 py-5 text-right font-mono text-white/65 text-lg">{team.standard}</td>
-                      <td className="px-6 py-5 text-right font-mono text-white/65 text-lg">{team.buzzer}</td>
-                      <td className="px-6 py-5 text-right font-mono font-black text-xl md:text-2xl text-cyan-100 bg-cyan-200/[0.05]">
-                        {team.total}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {leaderboard.length > 0 && (
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-3xl border border-cyan-300/25 bg-cyan-500/10 px-6 py-5 shadow-[0_0_60px_rgba(6,182,212,0.18)]">
+                    <p className="text-[10px] uppercase tracking-[0.32em] text-cyan-100/75 font-black">Leading Team</p>
+                    <p className="mt-2 text-2xl md:text-4xl font-black text-cyan-100">{formatTeamName(leaderboard[0]?.name)}</p>
+                  </div>
+                  <div className="rounded-3xl border border-fuchsia-300/25 bg-fuchsia-500/10 px-6 py-5 shadow-[0_0_60px_rgba(217,70,239,0.18)]">
+                    <p className="text-[10px] uppercase tracking-[0.32em] text-fuchsia-100/75 font-black">Lead Score</p>
+                    <p className="mt-2 text-2xl md:text-4xl font-black text-fuchsia-100 tabular-nums">{leaderboard[0]?.total ?? 0}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-7 rounded-[2rem] border border-white/15 bg-white/[0.04] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-white/8 border-b border-white/10 text-[10px] uppercase tracking-[0.24em] text-white/60 font-black">
+                        <th className="px-6 py-4 w-20 text-center">Rank</th>
+                        <th className="px-6 py-4">Team</th>
+                        <th className="px-6 py-4 text-right">Standard</th>
+                        <th className="px-6 py-4 text-right">Buzzer</th>
+                        <th className="px-6 py-4 text-right text-amber-200">Total Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {leaderboard.map((team: any, index: number) => (
+                        <tr key={index} className="transition-all duration-300 hover:bg-white/8">
+                          <td className="px-6 py-5 text-center font-mono font-black text-white/70">{index + 1}</td>
+                          <td className="px-6 py-5">
+                            <div className="font-black text-white text-lg md:text-2xl tracking-tight">{formatTeamName(team.name)}</div>
+                          </td>
+                          <td className="px-6 py-5 text-right font-mono text-white/70 text-lg">{team.standard}</td>
+                          <td className="px-6 py-5 text-right font-mono text-white/70 text-lg">{team.buzzer}</td>
+                          <td className="px-6 py-5 text-right font-mono font-black text-2xl md:text-3xl text-amber-200 bg-amber-300/[0.07] tabular-nums">{team.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </aside>
-
-      {isScorePanelOpen && (
-        <button
-          type="button"
-          aria-label="Close score panel backdrop"
-          onClick={() => setIsScorePanelOpen(false)}
-          className="fixed inset-0 z-40 bg-black/55"
-        />
       )}
 
       {/* MAIN LAYOUT (match screenshot: left HUD avatar + right question panel, blended seam) */}
@@ -734,6 +769,10 @@ export default function DisplayPage() {
         @keyframes questionGlow {
           0%, 100% { text-shadow: 0 0 22px rgba(125, 211, 252, 0.22), 0 0 44px rgba(129, 140, 248, 0.16); }
           50% { text-shadow: 0 0 28px rgba(125, 211, 252, 0.28), 0 0 58px rgba(129, 140, 248, 0.22); }
+        }
+        @keyframes scoreHeadingPulse {
+          0%, 100% { opacity: 0.85; transform: translateY(0); }
+          50% { opacity: 1; transform: translateY(-3px); }
         }
         @keyframes optIn {
           from { opacity: 0; transform: translateY(14px) scale(0.99); filter: blur(2px); }
