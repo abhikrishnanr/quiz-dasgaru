@@ -166,6 +166,7 @@ export async function GET(
 
         return NextResponse.json({
             session: {
+                sessionId,
                 eventName: sessionData.session.eventName,
                 statusLabel: sessionData.session.statusLabel,
                 questionState: questionState,
