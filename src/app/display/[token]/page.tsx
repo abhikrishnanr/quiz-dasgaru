@@ -16,8 +16,10 @@ export default function DisplayPage() {
   const [errorPayload, setErrorPayload] = useState<any>(null);
   const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
   const isAnnouncingRef = useRef(false);
+  const isSpeakingHostRef = useRef(false);
   const revealAnnouncementKeyRef = useRef('');
   const lowTimeWarningQuestionRef = useRef('');
+  const lockAnnouncementKeyRef = useRef('');
   const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
   const { speak, isFetching, isSpeaking, unlock } = useAudioController();
@@ -31,7 +33,7 @@ export default function DisplayPage() {
     setAudioUnlocked(true);
   }, [unlock]);
 
-  const pushHostLine = (line: string) => {
+  const pushHostLine = useCallback((line: string) => {
     const normalizedLine = line.trim();
     if (!normalizedLine) return;
 
@@ -39,7 +41,24 @@ export default function DisplayPage() {
       const next = [...previous, normalizedLine];
       return next.slice(-6);
     });
-  };
+  }, []);
+
+  const speakHostLine = useCallback(async (line: string) => {
+    if (isSpeakingHostRef.current || isFetching || isSpeaking) {
+      return false;
+    }
+
+    isSpeakingHostRef.current = true;
+    try {
+      const played = await speak(line);
+      if (played) {
+        pushHostLine(line);
+      }
+      return played;
+    } finally {
+      isSpeakingHostRef.current = false;
+    }
+  }, [isFetching, isSpeaking, pushHostLine, speak]);
 
   useEffect(() => {
     if (!token) return;
@@ -122,18 +141,17 @@ export default function DisplayPage() {
     const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
     isAnnouncingRef.current = true;
-    speak(message).then((played) => {
+    speakHostLine(message).then((played) => {
       isAnnouncingRef.current = false;
       if (played) {
         setLastAnnouncedQuestionKey(questionKey);
-        pushHostLine(message);
         console.info('[Display TTS] Auto announcement success:', questionKey);
       } else {
         console.warn('[Display TTS] Announcement failed/skipped — will retry on next poll:', questionKey);
       }
     });
 
-  }, [audioUnlocked, currentQuestion, duration, lastAnnouncedQuestionKey, session, speak, pushHostLine]);
+  }, [audioUnlocked, currentQuestion, duration, lastAnnouncedQuestionKey, session, speakHostLine]);
 
   // Report audio status to the server so admin page can show progress
   const sessionId = data?.session?.sessionId;
@@ -188,9 +206,36 @@ export default function DisplayPage() {
   const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
 
   useEffect(() => {
+    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+    const lockKey = `${questionKey}-${concernTeamAnswer.action}-${concernTeamAnswer.selectedKey ?? ''}`;
+    if (lockAnnouncementKeyRef.current === lockKey) return;
+
+    const teamLabel = formatTeamName(concernTeamAnswer.teamName) || concernTeamName;
+    const lockMessage = concernTeamAnswer.action === 'PASS'
+      ? `${teamLabel}, PASS submitted.`
+      : concernTeamAnswer.action === 'BUZZ'
+        ? `${teamLabel}, BUZZ received.`
+        : `${teamLabel} locked option ${concernTeamAnswer.selectedKey}.`;
+
+    speakHostLine(lockMessage).then((played) => {
+      if (played) {
+        lockAnnouncementKeyRef.current = lockKey;
+      }
+    });
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isLive, session?.concernTeamId, speakHostLine]);
+
+  useEffect(() => {
     if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
 
     const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+
+    // Don't play low-time warning once the concern team has already submitted.
+    if (concernTeamAnswer) {
+      lowTimeWarningQuestionRef.current = questionKey;
+      return;
+    }
 
     if (remaining >= 10 || remaining <= 0) {
       if (remaining >= 10) {
@@ -202,13 +247,12 @@ export default function DisplayPage() {
     if (lowTimeWarningQuestionRef.current === questionKey) return;
 
     const warningMessage = `TIME IS RUNNING OUT FOR ${concernTeamName.toUpperCase()}! LOCK IT IN NOW!`;
-    speak(warningMessage).then((played) => {
+    speakHostLine(warningMessage).then((played) => {
       if (played) {
-        pushHostLine(warningMessage);
         lowTimeWarningQuestionRef.current = questionKey;
       }
     });
-  }, [audioUnlocked, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speak]);
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speakHostLine]);
 
   useEffect(() => {
     if (!audioUnlocked || !isRevealed || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
@@ -217,17 +261,27 @@ export default function DisplayPage() {
     if (revealAnnouncementKeyRef.current === revealKey) return;
 
     const isCorrectSelection = concernTeamAnswer.selectedKey === currentQuestion.correctAnswer;
-    const revealMessage = isCorrectSelection
-      ? `${concernTeamName.toUpperCase()}, THAT IS ABSOLUTELY CORRECT! FANTASTIC JOB! KEEP THE MOMENTUM GOING!`
-      : `${concernTeamName.toUpperCase()}, THAT IS WRONG! DON'T DROP YOUR ENERGY — COME BACK STRONGER ON THE NEXT QUESTION!`;
+    const correctOption = Array.isArray(currentQuestion.options)
+      ? currentQuestion.options.find((opt: any) => opt?.key === currentQuestion.correctAnswer)
+      : null;
+    const correctAnswerLine = correctOption
+      ? `The right answer is ${correctOption.key}. ${correctOption.text}.`
+      : `The right answer is ${currentQuestion.correctAnswer}.`;
 
-    speak(revealMessage).then((played) => {
+    const selectedLine = concernTeamAnswer.selectedKey
+      ? `${concernTeamName} locked option ${concernTeamAnswer.selectedKey}.`
+      : `${concernTeamName} submitted an answer.`;
+
+    const revealMessage = isCorrectSelection
+      ? `${selectedLine} That is the right answer.`
+      : `${selectedLine} That is wrong. ${correctAnswerLine}`;
+
+    speakHostLine(revealMessage).then((played) => {
       if (played) {
         revealAnnouncementKeyRef.current = revealKey;
-        pushHostLine(revealMessage);
       }
     });
-  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speak]);
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speakHostLine]);
 
   if (loading && !data && !error) {
     return (

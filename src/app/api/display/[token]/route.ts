@@ -155,6 +155,7 @@ export async function GET(
             .filter((a: any) => a.questionId === currentQId)
             .sort((a: any, b: any) => b.submittedAt - a.submittedAt) // newest first for display feed
             .map((a: any) => ({
+                teamId: a.teamId,
                 teamName: teamScores[a.teamId]?.name || "Unknown Team",
                 submittedAt: a.submittedAt,
                 action: a.action,
