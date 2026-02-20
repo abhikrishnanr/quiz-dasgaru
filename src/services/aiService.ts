@@ -11,6 +11,29 @@ const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:v2:';
 const TTS_LOG_PREFIX = '[ElevenLabs TTS]';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
+const CLIENT_TTS_FAILURE_BACKOFF_BASE_MS = 4000;
+const CLIENT_TTS_FAILURE_BACKOFF_MAX_MS = 30000;
+
+let clientTTSFailureCount = 0;
+let clientTTSBlockedUntil = 0;
+
+function getClientTTSBackoffMs(failureCount: number): number {
+  const exponent = Math.max(0, failureCount - 1);
+  return Math.min(CLIENT_TTS_FAILURE_BACKOFF_BASE_MS * Math.pow(2, exponent), CLIENT_TTS_FAILURE_BACKOFF_MAX_MS);
+}
+
+function noteClientTTSFailure(retryAfterMs?: number): number {
+  clientTTSFailureCount += 1;
+  const backoffMs = Math.max(retryAfterMs || 0, getClientTTSBackoffMs(clientTTSFailureCount));
+  clientTTSBlockedUntil = Date.now() + backoffMs;
+  return backoffMs;
+}
+
+function resetClientTTSFailureState(): void {
+  clientTTSFailureCount = 0;
+  clientTTSBlockedUntil = 0;
+}
+
 
 export type TTSAudioPayload = {
   data: string;
@@ -99,9 +122,45 @@ function writeToLocalStorageCache(text: string, payload: TTSAudioPayload): void 
   }
 }
 
+export type TTSConnectionStatus = {
+  ok: boolean;
+  configured: boolean;
+  baseUrl: string;
+  details?: string;
+  status?: number;
+};
+
+export async function checkTTSConnection(): Promise<TTSConnectionStatus | undefined> {
+  try {
+    const res = await fetch('/api/tts', { method: 'GET', cache: 'no-store' });
+    const payload = (await res.json()) as TTSConnectionStatus;
+
+    if (!res.ok || !payload?.ok) {
+      console.error(`${TTS_LOG_PREFIX} Connection check failed.`, payload);
+      return payload;
+    }
+
+    console.info(`${TTS_LOG_PREFIX} Connection check passed.`, payload);
+    return payload;
+  } catch (err) {
+    console.error(`${TTS_LOG_PREFIX} Connection check request failed.`, err);
+    return undefined;
+  }
+}
+
 export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undefined> {
   if (!text.trim()) {
     console.info(`${TTS_LOG_PREFIX} TTS skipped because text is empty.`);
+    return undefined;
+  }
+
+  if (Date.now() < clientTTSBlockedUntil) {
+    const retryAfterMs = clientTTSBlockedUntil - Date.now();
+    console.warn(`${TTS_LOG_PREFIX} Skipping TTS request during failure cooldown.`, {
+      retryAfterMs,
+      failureCount: clientTTSFailureCount,
+      textPreview: text.slice(0, 80),
+    });
     return undefined;
   }
 
@@ -126,10 +185,29 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
     });
 
     if (!res.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await res.json();
+      } catch {
+        errorBody = await res.text();
+      }
+
+      const retryAfterHeader = Number(res.headers.get('retry-after') || '0');
+      const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : undefined;
+      const cooldownMs = noteClientTTSFailure(retryAfterMs);
+
       if (res.status === 503) {
-        console.warn(`[AI Service] TTS rate-limited — will retry on next call.`);
+        console.warn(`[AI Service] TTS temporarily unavailable — backing off before retry.`, {
+          cooldownMs,
+          errorBody,
+        });
       } else {
-        console.error(`[AI Service] TTS API Error: ${res.status} ${res.statusText}`);
+        console.error(`[AI Service] TTS API Error: ${res.status} ${res.statusText}`, {
+          cooldownMs,
+          errorBody,
+        });
       }
       return undefined;
     }
@@ -149,12 +227,14 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
 
     const payload: TTSAudioPayload = { mimeType, data: base64Data };
 
+    resetClientTTSFailureState();
     console.info(`${TTS_LOG_PREFIX} TTS fetched from server API.`, { textLength: text.length, mimeType });
     inMemoryTTSCache.set(text, payload);
     writeToLocalStorageCache(text, payload);
     return payload;
   } catch (err) {
-    console.error('[AI Service] TTS fetch failed:', err);
+    const cooldownMs = noteClientTTSFailure();
+    console.error('[AI Service] TTS fetch failed:', { cooldownMs, err });
     return undefined;
   }
 }

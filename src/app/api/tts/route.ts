@@ -8,6 +8,30 @@ const ELEVENLABS_BASE_URL = process.env.ELEVENLABS_BASE_URL?.trim() || 'https://
 const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID?.trim() || 'EXAVITQu4vr4xnSDxMaL';
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID?.trim() || 'eleven_flash_v2_5';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT?.trim() || 'mp3_44100_128';
+const UPSTREAM_FAILURE_BACKOFF_BASE_MS = Number(process.env.ELEVENLABS_FAILURE_BACKOFF_BASE_MS || 5000);
+const UPSTREAM_FAILURE_BACKOFF_MAX_MS = Number(process.env.ELEVENLABS_FAILURE_BACKOFF_MAX_MS || 60000);
+
+let upstreamFailureCount = 0;
+let upstreamBlockedUntil = 0;
+
+function getUpstreamBackoffMs(failureCount: number): number {
+  const exponent = Math.max(0, failureCount - 1);
+  const backoff = UPSTREAM_FAILURE_BACKOFF_BASE_MS * Math.pow(2, exponent);
+  return Math.min(backoff, UPSTREAM_FAILURE_BACKOFF_MAX_MS);
+}
+
+function noteUpstreamFailure(): number {
+  upstreamFailureCount += 1;
+  const backoffMs = getUpstreamBackoffMs(upstreamFailureCount);
+  upstreamBlockedUntil = Date.now() + backoffMs;
+  return backoffMs;
+}
+
+function resetUpstreamFailureState(): void {
+  upstreamFailureCount = 0;
+  upstreamBlockedUntil = 0;
+}
+
 
 const CACHE_DIR = path.join(process.cwd(), '.tts-cache');
 if (!fs.existsSync(CACHE_DIR)) {
@@ -20,6 +44,14 @@ type TTSRequestBody = {
   modelId?: string;
   outputFormat?: string;
   languageCode?: string;
+};
+
+type TTSConnectionCheck = {
+  ok: boolean;
+  configured: boolean;
+  baseUrl: string;
+  details?: string;
+  status?: number;
 };
 
 function resolveAudioResponseMeta(outputFormat: string): { extension: string; contentType: string; accept: string } {
@@ -88,6 +120,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (Date.now() < upstreamBlockedUntil) {
+      const retryAfterMs = upstreamBlockedUntil - Date.now();
+      return NextResponse.json(
+        {
+          error: 'ElevenLabs TTS temporarily paused after repeated upstream failures',
+          details: `Retry after ${retryAfterMs}ms.`,
+          status: 503,
+          retryAfterMs,
+          failureCount: upstreamFailureCount,
+        },
+        {
+          status: 503,
+          headers: {
+            'Retry-After': Math.max(1, Math.ceil(retryAfterMs / 1000)).toString(),
+          },
+        },
+      );
+    }
+
     const endpoint = new URL(
       `/v1/text-to-speech/${encodeURIComponent(resolvedVoiceId)}`,
       ELEVENLABS_BASE_URL,
@@ -110,15 +161,27 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const errText = await upstream.text();
+      const backoffMs = noteUpstreamFailure();
+
+      const status = upstream.status === 429 ? 503 : upstream.status;
       return NextResponse.json(
         {
           error: 'ElevenLabs TTS generation failed',
           details: errText || upstream.statusText,
           status: upstream.status,
+          retryAfterMs: backoffMs,
+          failureCount: upstreamFailureCount,
         },
-        { status: upstream.status === 429 ? 503 : 500 },
+        {
+          status,
+          headers: {
+            'Retry-After': Math.max(1, Math.ceil(backoffMs / 1000)).toString(),
+          },
+        },
       );
     }
+
+    resetUpstreamFailureState();
 
     const upstreamContentType = upstream.headers.get('content-type') || audioMeta.contentType;
 
@@ -133,8 +196,75 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    const backoffMs = noteUpstreamFailure();
     return NextResponse.json(
-      { error: 'Internal Server Error', details: error?.message || 'Unknown error' },
+      {
+        error: 'Internal Server Error',
+        details: error?.message || 'Unknown error',
+        retryAfterMs: backoffMs,
+        failureCount: upstreamFailureCount,
+      },
+      {
+        status: 500,
+        headers: {
+          'Retry-After': Math.max(1, Math.ceil(backoffMs / 1000)).toString(),
+        },
+      },
+    );
+  }
+}
+
+export async function GET(): Promise<NextResponse<TTSConnectionCheck>> {
+  if (!ELEVENLABS_API_KEY) {
+    return NextResponse.json(
+      {
+        ok: false,
+        configured: false,
+        baseUrl: ELEVENLABS_BASE_URL,
+        details: 'ELEVENLABS_API_KEY is not configured.',
+      },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const endpoint = new URL('/v1/models', ELEVENLABS_BASE_URL);
+    const upstream = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+      cache: 'no-store',
+    });
+
+    if (!upstream.ok) {
+      const details = await upstream.text();
+      return NextResponse.json(
+        {
+          ok: false,
+          configured: true,
+          baseUrl: ELEVENLABS_BASE_URL,
+          status: upstream.status,
+          details: details || upstream.statusText,
+        },
+        { status: upstream.status },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      configured: true,
+      baseUrl: ELEVENLABS_BASE_URL,
+      status: upstream.status,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        ok: false,
+        configured: true,
+        baseUrl: ELEVENLABS_BASE_URL,
+        details: error?.message || 'Unknown connection error',
+      },
       { status: 500 },
     );
   }
