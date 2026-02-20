@@ -25,6 +25,7 @@ export function TeamGameClient() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasPassed, setHasPassed] = useState(false); // Tracks if team passed this question
     const [askAiText, setAskAiText] = useState('');
+    const [isMicActive, setIsMicActive] = useState(false);
 
     // Sound integration
     const { play } = useGameSounds();
@@ -148,6 +149,7 @@ export function TeamGameClient() {
         setSelectedOption(null);
         setIsSubmitting(false);
         setHasPassed(false);
+        setIsMicActive(false);
     }, [gameState?.question?.id]);
 
 
@@ -367,6 +369,15 @@ export function TeamGameClient() {
                             <p className="text-slate-300">Waiting… Team {gameState?.concernTeamName || concernTeamId || 'Selected Team'} is asking now.</p>
                         ) : (
                             <>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => setIsMicActive((value) => !value)}
+                                        className={`px-4 py-2 rounded-full font-bold text-sm ${isMicActive ? 'bg-rose-600 text-white' : 'bg-slate-700 text-slate-100'}`}
+                                    >
+                                        {isMicActive ? '⏹ Stop Mic' : '🎤 Start Mic'}
+                                    </button>
+                                    <span className="text-xs text-slate-400">Failsafe typing input is available below.</span>
+                                </div>
                                 <textarea
                                     value={askAiText}
                                     onChange={(event) => setAskAiText(event.target.value)}
