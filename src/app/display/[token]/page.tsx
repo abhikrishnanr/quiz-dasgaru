@@ -24,6 +24,10 @@ export default function DisplayPage() {
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
   const { speak, isFetching, isSpeaking, unlock } = useAudioController();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const welcomeAnnouncementPlayedRef = useRef(false);
+  const [introOverlayDismissed, setIntroOverlayDismissed] = useState(false);
+
+  const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
   const handleUnlockAudio = useCallback(async () => {
     try {
@@ -204,6 +208,25 @@ export default function DisplayPage() {
     concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
 
   const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
+  const isQuestionActivated = isLive;
+
+  useEffect(() => {
+    if (isQuestionActivated) {
+      setIntroOverlayDismissed(true);
+    }
+  }, [isQuestionActivated]);
+
+  useEffect(() => {
+    if (!audioUnlocked || introOverlayDismissed || isQuestionActivated) return;
+    if (welcomeAnnouncementPlayedRef.current) return;
+
+    welcomeAnnouncementPlayedRef.current = true;
+    speakHostLine(welcomeAnnouncement).then((played) => {
+      if (!played) {
+        welcomeAnnouncementPlayedRef.current = false;
+      }
+    });
+  }, [audioUnlocked, introOverlayDismissed, isQuestionActivated, speakHostLine, welcomeAnnouncement]);
 
   useEffect(() => {
     if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
@@ -419,6 +442,25 @@ export default function DisplayPage() {
             >
               <span className="text-2xl">▶</span> Start Audio
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Pre-quiz welcome overlay ─── */}
+      {!introOverlayDismissed && !isQuestionActivated && (
+        <div className="fixed inset-0 z-[90] overflow-hidden">
+          <div className="absolute inset-0">
+            <AIHostAvatar isSpeaking={isSpeaking} size="lg" />
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(10,20,45,0.2),rgba(5,10,22,0.82)_72%)]" />
+          <div className="absolute inset-x-0 bottom-10 md:bottom-14 flex justify-center px-6">
+            <div className="max-w-5xl rounded-[2.8rem] border border-cyan-200/30 bg-[#071027]/70 px-8 py-7 md:px-12 md:py-10 backdrop-blur-2xl shadow-[0_0_120px_rgba(90,220,255,0.24)] text-center">
+              <div className="text-2xl md:text-4xl lg:text-5xl font-black tracking-[0.16em] uppercase bodhiniText">Bodhini AI</div>
+              <div className="mt-3 text-xs md:text-sm uppercase tracking-[0.3em] text-cyan-100/75 font-black">Welcome Sequence Running</div>
+              <p className="mt-4 text-base md:text-lg lg:text-xl font-semibold text-white/88">
+                Welcome to the Digital University Kerala AI Quiz. Waiting for quiz master to activate the first question.
+              </p>
+            </div>
           </div>
         </div>
       )}
