@@ -7,9 +7,9 @@ const API_KEYS = [
   process.env.NEXT_PUBLIC_GEMINI_API_KEY_2,
 ].filter((k): k is string => !!k?.trim());
 
-const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const TEXT_MODEL = 'gemini-2.5-flash';
 const CACHE_PREFIX = 'ai-host-tts:';
+const TTS_LOG_PREFIX = '[ElevenLabs TTS]';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
 
 export type TTSAudioPayload = {
@@ -19,7 +19,7 @@ export type TTSAudioPayload = {
 
 const inMemoryTTSCache = new Map<string, TTSAudioPayload>();
 
-// --- Multi-key failover ---
+// --- Multi-key failover (Gemini text generation only) ---
 let activeKeyIndex = 0;
 const aiClients: GoogleGenAI[] = API_KEYS.map((key) => new GoogleGenAI({ apiKey: key }));
 
@@ -99,51 +99,30 @@ function writeToLocalStorageCache(text: string, payload: TTSAudioPayload): void 
   }
 }
 
-function extractAudioData(response: unknown): TTSAudioPayload | undefined {
-  if (!response || typeof response !== 'object') {
-    return undefined;
-  }
-
-  const typedResponse = response as {
-    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
-  };
-
-  const inlineData = typedResponse.candidates?.[0]?.content?.parts?.find((part) => part?.inlineData?.data)?.inlineData;
-  if (!inlineData?.data) {
-    return undefined;
-  }
-
-  return {
-    data: inlineData.data,
-    mimeType: inlineData.mimeType,
-  };
-}
-
 export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undefined> {
   if (!text.trim()) {
-    logGeminiInfo('TTS skipped because text is empty.');
+    console.info(`${TTS_LOG_PREFIX} TTS skipped because text is empty.`);
     return undefined;
   }
 
   const cachedAudio = inMemoryTTSCache.get(text);
   if (cachedAudio?.data) {
-    logGeminiInfo('TTS cache hit (memory).', { textPreview: text.slice(0, 80) });
+    console.info(`${TTS_LOG_PREFIX} TTS cache hit (memory).`, { textPreview: text.slice(0, 80) });
     return cachedAudio;
   }
 
   const localCached = readFromLocalStorageCache(text);
   if (localCached?.data) {
-    logGeminiInfo('TTS cache hit (localStorage).', { textPreview: text.slice(0, 80) });
+    console.info(`${TTS_LOG_PREFIX} TTS cache hit (localStorage).`, { textPreview: text.slice(0, 80) });
     inMemoryTTSCache.set(text, localCached);
     return localCached;
   }
 
-  // Try fetching from server-side TTS API (which handles caching & failover)
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceName: 'Kore' }), // 'Kore' is Female
+      body: JSON.stringify({ text }),
     });
 
     if (!res.ok) {
@@ -155,14 +134,12 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
       return undefined;
     }
 
-    const mimeType = 'audio/wav'; // Server converts PCM -> WAV
+    const mimeType = res.headers.get('content-type') || 'audio/mpeg';
     const blob = await res.blob();
-    // Convert Blob -> Base64 for compatibility with existing player
     const base64Data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        // Remove data:...;base64, prefix
         const base64 = result.split(',')[1];
         resolve(base64);
       };
@@ -172,11 +149,10 @@ export async function getTTSAudio(text: string): Promise<TTSAudioPayload | undef
 
     const payload: TTSAudioPayload = { mimeType, data: base64Data };
 
-    logGeminiInfo('TTS fetched from server API.', { textLength: text.length });
+    console.info(`${TTS_LOG_PREFIX} TTS fetched from server API.`, { textLength: text.length, mimeType });
     inMemoryTTSCache.set(text, payload);
     writeToLocalStorageCache(text, payload);
     return payload;
-
   } catch (err) {
     console.error('[AI Service] TTS fetch failed:', err);
     return undefined;
@@ -249,9 +225,8 @@ export async function generateCommentary(
         error,
       });
 
-      // Try next key if available
       if (!rotateToNextKey()) {
-        return undefined; // All keys exhausted
+        return undefined;
       }
     }
   }

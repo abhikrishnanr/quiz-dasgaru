@@ -144,7 +144,7 @@ export default function DisplayPage() {
 
   useEffect(() => {
     if (isFetching && !isSpeaking) {
-      reportAudioStatus('FETCHING', 'Generating audio from Gemini TTS…');
+      reportAudioStatus('FETCHING', 'Generating audio from ElevenLabs TTS…');
     } else if (isSpeaking) {
       reportAudioStatus('SPEAKING', 'AI Host is speaking…');
     } else {

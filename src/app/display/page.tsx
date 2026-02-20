@@ -382,14 +382,14 @@ export default function DisplayPage() {
             <p className="mt-3 text-center text-sm text-cyan-200/80">AI Host {isSpeaking ? 'Speaking…' : 'Standing by'}</p>
 
             <div className="mt-4 rounded-xl border border-cyan-500/30 bg-slate-950/70 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-200">Gemini voice transcript</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-cyan-200">AI voice transcript</h3>
               <ul className="mt-3 space-y-2 text-sm text-slate-200">
                 {hostTranscript.map((line, index) => (
                   <li key={`${index}-${line.slice(0, 24)}`} className="rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2">
                     {line}
                   </li>
                 ))}
-                {hostTranscript.length === 0 && <li className="text-slate-400">Transcript will appear as Gemini speaks.</li>}
+                {hostTranscript.length === 0 && <li className="text-slate-400">Transcript will appear as the AI host speaks.</li>}
               </ul>
             </div>
           </div>
