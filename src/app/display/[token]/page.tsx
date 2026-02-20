@@ -364,7 +364,7 @@ export default function DisplayPage() {
     if (!audioUnlocked || !isScorePanelOpen || !leaderboard.length) return;
 
     const topTeams = leaderboard.slice(0, 3);
-    const announcementKey = topTeams
+    const announcementKey = leaderboard
       .map((team: any, index: number) => `${index + 1}-${team?.name ?? 'Team'}-${team?.total ?? 0}`)
       .join('|');
 
@@ -372,11 +372,13 @@ export default function DisplayPage() {
       return;
     }
 
-    const announcementLine = topTeams
-      .map((team: any, index: number) => `${index + 1}. ${formatTeamName(team?.name) || 'Team'} with ${team?.total ?? 0} points`)
+    const announcementLine = leaderboard
+      .map((team: any) => `${formatTeamName(team?.name) || 'Team'} has ${team?.total ?? 0} total points`)
       .join('. ');
 
-    const summary = `Current scoreboard standings. ${announcementLine}.`;
+    const summary = `Lets see the score board now. Current top teams are ${topTeams
+      .map((team: any, index: number) => `${index + 1}. ${formatTeamName(team?.name) || 'Team'}`)
+      .join(', ')}. ${announcementLine}.`;
     speakHostLine(summary).then((played) => {
       if (played) {
         scoreboardAnnouncementKeyRef.current = announcementKey;
@@ -559,12 +561,12 @@ export default function DisplayPage() {
 
       {/* TOP HUD */}
       <div className="fixed left-6 top-6 z-40 flex items-center gap-4">
-        <div className="hudPill flex items-center gap-3 rounded-full border border-white/10 bg-white/6 backdrop-blur-xl px-5 py-3 shadow-[0_0_60px_rgba(90,220,255,0.10)]">
+        <div className="hudPill flex items-center gap-4 rounded-full border border-cyan-200/25 bg-white/10 backdrop-blur-xl px-8 py-4 shadow-[0_0_75px_rgba(90,220,255,0.18)]">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.45)] animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-[0.36em] text-emerald-200/85">System Active</span>
-          <span className="mx-1 h-4 w-px bg-white/10" />
-          <span className="text-[13px] md:text-[14px] font-black uppercase tracking-[0.12em]">
-            DUK <span className="bodhiniText">BODHINI</span>
+          <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.36em] text-emerald-200/90">System Active</span>
+          <span className="mx-2 h-6 w-px bg-white/10" />
+          <span className="text-xl md:text-3xl font-black uppercase tracking-[0.16em]">
+            DUK <span className="bodhiniText">BODHINI AI</span>
           </span>
         </div>
       </div>
@@ -601,56 +603,56 @@ export default function DisplayPage() {
       {/* SCOREBOARD OVERLAY */}
       {isScorePanelOpen && (
         <div className="fixed inset-0 z-[70] bg-[#030712]/92 backdrop-blur-xl">
-          <div className="relative h-full w-full overflow-y-auto px-6 py-8 md:px-10 lg:px-16">
-            <div className="mx-auto w-full max-w-7xl">
+          <div className="relative h-full w-full overflow-y-auto px-0 py-8">
+            <div className="w-full">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl md:text-3xl lg:text-4xl font-black uppercase tracking-[0.16em] text-white animate-[scoreHeadingPulse_2.8s_ease-in-out_infinite] drop-shadow-[0_0_28px_rgba(103,232,249,0.45)]">
+                <h2 className="px-6 md:px-10 text-2xl md:text-4xl lg:text-5xl font-black uppercase tracking-[0.16em] text-white animate-[scoreHeadingPulse_2.8s_ease-in-out_infinite] drop-shadow-[0_0_28px_rgba(103,232,249,0.45)]">
                   Bodhini AI Quiz Scoreboard
                 </h2>
                 <button
                   type="button"
                   onClick={() => setIsScorePanelOpen(false)}
-                  className="rounded-full border border-white/20 bg-white/10 px-6 py-2 text-[10px] font-black uppercase tracking-[0.32em] text-white/90 hover:bg-white/20 transition"
+                  className="mr-6 md:mr-10 rounded-full border border-white/20 bg-white/10 px-7 py-3 text-[11px] font-black uppercase tracking-[0.32em] text-white/90 hover:bg-white/20 transition"
                 >
                   Close
                 </button>
               </div>
 
               {leaderboard.length > 0 && (
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-3xl border border-cyan-300/25 bg-cyan-500/10 px-6 py-5 shadow-[0_0_60px_rgba(6,182,212,0.18)]">
-                    <p className="text-[10px] uppercase tracking-[0.32em] text-cyan-100/75 font-black">Leading Team</p>
-                    <p className="mt-2 text-2xl md:text-4xl font-black text-cyan-100">{formatTeamName(leaderboard[0]?.name)}</p>
+                <div className="mt-6 grid gap-4 md:grid-cols-2 px-6 md:px-10">
+                  <div className="rounded-3xl border border-cyan-300/25 bg-cyan-500/10 px-7 py-6 shadow-[0_0_60px_rgba(6,182,212,0.18)]">
+                    <p className="text-xs uppercase tracking-[0.32em] text-cyan-100/75 font-black">Leading Team</p>
+                    <p className="mt-2 text-4xl md:text-5xl font-black text-cyan-100">{formatTeamName(leaderboard[0]?.name)}</p>
                   </div>
-                  <div className="rounded-3xl border border-fuchsia-300/25 bg-fuchsia-500/10 px-6 py-5 shadow-[0_0_60px_rgba(217,70,239,0.18)]">
-                    <p className="text-[10px] uppercase tracking-[0.32em] text-fuchsia-100/75 font-black">Lead Score</p>
-                    <p className="mt-2 text-2xl md:text-4xl font-black text-fuchsia-100 tabular-nums">{leaderboard[0]?.total ?? 0}</p>
+                  <div className="rounded-3xl border border-fuchsia-300/25 bg-fuchsia-500/10 px-7 py-6 shadow-[0_0_60px_rgba(217,70,239,0.18)]">
+                    <p className="text-xs uppercase tracking-[0.32em] text-fuchsia-100/75 font-black">Lead Score</p>
+                    <p className="mt-2 text-4xl md:text-5xl font-black text-fuchsia-100 tabular-nums">{leaderboard[0]?.total ?? 0}</p>
                   </div>
                 </div>
               )}
 
-              <div className="mt-7 rounded-[2rem] border border-white/15 bg-gradient-to-b from-cyan-500/[0.12] via-indigo-500/[0.10] to-violet-500/[0.08] overflow-hidden shadow-[0_0_90px_rgba(56,189,248,0.2)]">
+              <div className="mt-7 rounded-none md:rounded-[2rem] border-y md:border border-white/15 bg-gradient-to-b from-cyan-500/[0.12] via-indigo-500/[0.10] to-violet-500/[0.08] overflow-hidden shadow-[0_0_90px_rgba(56,189,248,0.2)]">
                 <div className="overflow-x-auto">
                   <table className="w-full text-center border-collapse">
                     <thead>
-                      <tr className="bg-white/8 border-b border-white/10 text-[10px] uppercase tracking-[0.24em] text-white/60 font-black">
-                        <th className="px-6 py-4 w-20 text-center">Rank</th>
-                        <th className="px-6 py-4">Team</th>
-                        <th className="px-6 py-4 text-center">Standard</th>
-                        <th className="px-6 py-4 text-center">Buzzer</th>
-                        <th className="px-6 py-4 text-center text-amber-200">Total Points</th>
+                      <tr className="bg-white/8 border-b border-white/10 text-xs md:text-sm uppercase tracking-[0.24em] text-white/60 font-black">
+                        <th className="px-6 md:px-10 py-5 md:py-6 w-24 text-center">Rank</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6">Team</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6 text-center">Standard</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6 text-center">Buzzer</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6 text-center text-amber-200">Total Points</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {leaderboard.map((team: any, index: number) => (
                         <tr key={index} className="transition-all duration-300 hover:bg-white/8">
-                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-white/80">{index + 1}</td>
-                          <td className="px-6 py-6 text-center">
-                            <div className="font-black text-white text-2xl md:text-5xl tracking-[0.02em] drop-shadow-[0_0_30px_rgba(125,211,252,0.35)]">{formatTeamName(team.name)}</div>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-white/80">{index + 1}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center">
+                            <div className="font-black text-white text-3xl md:text-6xl tracking-[0.02em] drop-shadow-[0_0_30px_rgba(125,211,252,0.35)]">{formatTeamName(team.name)}</div>
                           </td>
-                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-cyan-100 tabular-nums">{team.standard}</td>
-                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-fuchsia-100 tabular-nums">{team.buzzer}</td>
-                          <td className="px-6 py-6 text-center font-mono font-black text-4xl md:text-6xl text-amber-200 bg-amber-300/[0.10] tabular-nums">{team.total}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-cyan-100 tabular-nums">{team.standard}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-fuchsia-100 tabular-nums">{team.buzzer}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-5xl md:text-7xl text-amber-200 bg-amber-300/[0.10] tabular-nums">{team.total}</td>
                         </tr>
                       ))}
                     </tbody>
