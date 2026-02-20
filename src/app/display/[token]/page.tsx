@@ -82,7 +82,11 @@ export default function DisplayPage() {
 
   const session = data?.session;
   const currentQuestion = data?.currentQuestion;
+  const leaderboard = data?.leaderboard ?? [];
+  const recentAnswers = data?.recentAnswers ?? [];
   const isLive = session?.questionState === 'LIVE';
+  const isLocked = session?.questionState === 'LOCKED';
+  const isRevealed = session?.questionState === 'REVEALED';
   const startedAt = session?.questionStartedAt;
   const duration = session?.timerDurationSec || 20;
 
@@ -153,6 +157,77 @@ export default function DisplayPage() {
       reportAudioStatus('IDLE', '');
     }
   }, [isFetching, isSpeaking, reportAudioStatus]);
+
+  // Calc remaining time
+  let remaining = 0;
+  if (isLive && startedAt) {
+    const elapsed = (currentTimeMs - startedAt) / 1000;
+    remaining = Math.max(0, Math.ceil(duration - elapsed));
+  }
+
+  const latestHostLine = hostTranscript.length ? hostTranscript[hostTranscript.length - 1] : '';
+
+  // UI-only derived labels (no logic changes)
+  const roundLabel =
+    (currentQuestion?.roundType as string | undefined) ||
+    (session?.gameMode as string | undefined) ||
+    (session?.questionState as string | undefined) ||
+    'ROUND';
+
+  // Determine if concern team answered incorrectly
+  const concernTeamAnswer = session?.concernTeamId
+    ? recentAnswers?.find((a: any) => a.teamId === session.concernTeamId)
+    : null;
+  const showWrongAnswer =
+    isRevealed &&
+    session?.gameMode === 'STANDARD' &&
+    session?.concernTeamId &&
+    concernTeamAnswer &&
+    concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
+
+  const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
+
+  useEffect(() => {
+    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
+
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+
+    if (remaining >= 10 || remaining <= 0) {
+      if (remaining >= 10) {
+        lowTimeWarningQuestionRef.current = '';
+      }
+      return;
+    }
+
+    if (lowTimeWarningQuestionRef.current === questionKey) return;
+
+    const warningMessage = `TIME IS RUNNING OUT FOR ${concernTeamName.toUpperCase()}! LOCK IT IN NOW!`;
+    speak(warningMessage).then((played) => {
+      if (played) {
+        pushHostLine(warningMessage);
+        lowTimeWarningQuestionRef.current = questionKey;
+      }
+    });
+  }, [audioUnlocked, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speak]);
+
+  useEffect(() => {
+    if (!audioUnlocked || !isRevealed || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+
+    const revealKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}-${concernTeamAnswer.selectedKey}-${currentQuestion.correctAnswer}`;
+    if (revealAnnouncementKeyRef.current === revealKey) return;
+
+    const isCorrectSelection = concernTeamAnswer.selectedKey === currentQuestion.correctAnswer;
+    const revealMessage = isCorrectSelection
+      ? `${concernTeamName.toUpperCase()}, THAT IS ABSOLUTELY CORRECT! FANTASTIC JOB! KEEP THE MOMENTUM GOING!`
+      : `${concernTeamName.toUpperCase()}, THAT IS WRONG! DON'T DROP YOUR ENERGY — COME BACK STRONGER ON THE NEXT QUESTION!`;
+
+    speak(revealMessage).then((played) => {
+      if (played) {
+        revealAnnouncementKeyRef.current = revealKey;
+        pushHostLine(revealMessage);
+      }
+    });
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speak]);
 
   if (loading && !data && !error) {
     return (
@@ -256,81 +331,6 @@ export default function DisplayPage() {
       </div>
     );
   }
-
-  const { leaderboard, recentAnswers } = data;
-  const isLocked = session.questionState === 'LOCKED';
-  const isRevealed = session.questionState === 'REVEALED';
-
-  // Calc remaining time
-  let remaining = 0;
-  if (isLive && startedAt) {
-    const elapsed = (currentTimeMs - startedAt) / 1000;
-    remaining = Math.max(0, Math.ceil(duration - elapsed));
-  }
-
-  const latestHostLine = hostTranscript.length ? hostTranscript[hostTranscript.length - 1] : '';
-
-  // UI-only derived labels (no logic changes)
-  const roundLabel =
-    (currentQuestion?.roundType as string | undefined) ||
-    (session?.gameMode as string | undefined) ||
-    (session?.questionState as string | undefined) ||
-    'ROUND';
-
-  // Determine if concern team answered incorrectly
-  const concernTeamAnswer = session.concernTeamId
-    ? recentAnswers?.find((a: any) => a.teamId === session.concernTeamId)
-    : null;
-  const showWrongAnswer =
-    isRevealed &&
-    session.gameMode === 'STANDARD' &&
-    session.concernTeamId &&
-    concernTeamAnswer &&
-    concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
-
-  const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
-
-  useEffect(() => {
-    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
-
-    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
-
-    if (remaining >= 10 || remaining <= 0) {
-      if (remaining >= 10) {
-        lowTimeWarningQuestionRef.current = '';
-      }
-      return;
-    }
-
-    if (lowTimeWarningQuestionRef.current === questionKey) return;
-
-    const warningMessage = `TIME IS RUNNING OUT FOR ${concernTeamName.toUpperCase()}! LOCK IT IN NOW!`;
-    speak(warningMessage).then((played) => {
-      if (played) {
-        pushHostLine(warningMessage);
-        lowTimeWarningQuestionRef.current = questionKey;
-      }
-    });
-  }, [audioUnlocked, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speak]);
-
-  useEffect(() => {
-    if (!audioUnlocked || !isRevealed || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
-
-    const revealKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}-${concernTeamAnswer.selectedKey}-${currentQuestion.correctAnswer}`;
-    if (revealAnnouncementKeyRef.current === revealKey) return;
-
-    const isCorrectSelection = concernTeamAnswer.selectedKey === currentQuestion.correctAnswer;
-    const revealMessage = isCorrectSelection
-      ? `${concernTeamName.toUpperCase()}, THAT IS ABSOLUTELY CORRECT! FANTASTIC JOB! KEEP THE MOMENTUM GOING!`
-      : `${concernTeamName.toUpperCase()}, THAT IS WRONG! DON'T DROP YOUR ENERGY — COME BACK STRONGER ON THE NEXT QUESTION!`;
-
-    speak(revealMessage).then((played) => {
-      if (played) {
-        revealAnnouncementKeyRef.current = revealKey;
-        pushHostLine(revealMessage);
-      }
-    });
-  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speak]);
 
   return (
     <div className="display-scope relative min-h-screen w-full overflow-hidden bg-[#071027] text-white">
