@@ -174,7 +174,10 @@ export async function GET(
                 gameMode: sessionData.session.gameMode,
                 concernTeamId: sessionData.session.concernTeamId,
                 concernTeamName: teamScores[sessionData.session.concernTeamId]?.name || null,
+                buzzOwnerTeamId: sessionData.session.buzzOwnerTeamId,
+                buzzOwnerTeamName: teamScores[sessionData.session.buzzOwnerTeamId]?.name || null,
             },
+
             currentQuestion: sanitizedQuestion,
             recentAnswers: recentAnswers,
             leaderboard: rankedLeaderboard,

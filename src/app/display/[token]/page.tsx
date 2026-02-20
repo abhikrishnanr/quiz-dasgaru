@@ -113,6 +113,22 @@ export default function DisplayPage() {
   const startedAt = session?.questionStartedAt;
   const duration = session?.timerDurationSec || 20;
 
+  const isBuzzerMode = session?.gameMode === 'BUZZER';
+  const actingTeamId = isBuzzerMode ? session?.buzzOwnerTeamId : session?.concernTeamId;
+  const actingTeamName = isBuzzerMode
+    ? (formatTeamName(session?.buzzOwnerTeamName) || 'Acting Team')
+    : (formatTeamName(session?.concernTeamName) || 'Concerned Team');
+
+  const actingTeamLatestAction = actingTeamId
+    ? recentAnswers?.find((a: any) => a.teamId === actingTeamId)
+    : null;
+
+  const actingTeamRevealAnswer = actingTeamId
+    ? recentAnswers?.find((a: any) => a.teamId === actingTeamId && a.action !== 'BUZZ')
+    : null;
+
+
+
   useEffect(() => {
     if (!audioUnlocked) return; // Wait for user gesture
     if (!currentQuestion || !session) {
@@ -136,13 +152,14 @@ export default function DisplayPage() {
       return;
     }
 
-    const isBuzzerMode = session?.gameMode === 'BUZZER';
-    const teamName = isBuzzerMode ? 'all teams' : (formatTeamName(session.concernTeamName) || 'all teams');
+    const teamTitle = isBuzzerMode ? 'all teams' : (formatTeamName(session.concernTeamName) || 'all teams');
+
     const optionSpeech = Array.isArray(currentQuestion.options)
       ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
       : '';
 
-    const intro = `Question is for ${teamName}.`;
+    const intro = `Question is for ${teamTitle}.`;
+
 
     const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
@@ -198,16 +215,13 @@ export default function DisplayPage() {
     (session?.questionState as string | undefined) ||
     'ROUND';
 
-  // Determine if concern team answered incorrectly
-  const concernTeamAnswer = session?.concernTeamId
-    ? recentAnswers?.find((a: any) => a.teamId === session.concernTeamId)
-    : null;
+  // Determine if acting team answered incorrectly
   const showWrongAnswer =
     isRevealed &&
-    session?.gameMode === 'STANDARD' &&
-    session?.concernTeamId &&
-    concernTeamAnswer &&
-    concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
+    actingTeamId &&
+    actingTeamRevealAnswer &&
+    actingTeamRevealAnswer.selectedKey !== currentQuestion?.correctAnswer;
+
 
   const concernTeamName = (session?.gameMode === 'BUZZER')
     ? 'All Teams'
@@ -234,36 +248,38 @@ export default function DisplayPage() {
   }, [audioUnlocked, introOverlayDismissed, isQuestionActivated, speakHostLine, welcomeAnnouncement]);
 
   useEffect(() => {
-    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+    if (!audioUnlocked || !isLive || !currentQuestion || !actingTeamId || !actingTeamLatestAction) return;
 
-    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
-    const lockKey = `${questionKey}-${concernTeamAnswer.action}-${concernTeamAnswer.selectedKey ?? ''}`;
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${actingTeamId}`;
+    const lockKey = `${questionKey}-${actingTeamLatestAction.action}-${actingTeamLatestAction.selectedKey ?? ''}`;
     if (lockAnnouncementKeyRef.current === lockKey) return;
 
-    const teamLabel = formatTeamName(concernTeamAnswer.teamName) || concernTeamName;
-    const lockMessage = concernTeamAnswer.action === 'PASS'
+    const teamLabel = actingTeamName;
+    const lockMessage = actingTeamLatestAction.action === 'PASS'
       ? `${teamLabel}, PASS submitted.`
-      : concernTeamAnswer.action === 'BUZZ'
+      : actingTeamLatestAction.action === 'BUZZ'
         ? `${teamLabel}, BUZZ received.`
-        : `${teamLabel} locked option ${concernTeamAnswer.selectedKey}.`;
+        : `${teamLabel} locked option ${actingTeamLatestAction.selectedKey}.`;
 
     speakHostLine(lockMessage).then((played) => {
       if (played) {
         lockAnnouncementKeyRef.current = lockKey;
       }
     });
-  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isLive, session?.concernTeamId, speakHostLine]);
+  }, [audioUnlocked, actingTeamLatestAction, actingTeamName, actingTeamId, currentQuestion, isLive, speakHostLine]);
+
 
   useEffect(() => {
-    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
+    if (!audioUnlocked || !isLive || !currentQuestion || !actingTeamId) return;
 
-    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${actingTeamId}`;
 
     // Don't play low-time warning once the concern team has already submitted.
-    if (concernTeamAnswer) {
+    if (actingTeamRevealAnswer) {
       lowTimeWarningQuestionRef.current = questionKey;
       return;
     }
+
 
     if (remaining >= 10 || remaining <= 0) {
       if (remaining >= 10) {
@@ -274,21 +290,23 @@ export default function DisplayPage() {
 
     if (lowTimeWarningQuestionRef.current === questionKey) return;
 
-    const warningMessage = `TIME IS RUNNING OUT FOR ${concernTeamName.toUpperCase()}! LOCK IT IN NOW!`;
+    const warningMessage = `TIME IS RUNNING OUT FOR ${actingTeamName.toUpperCase()}! LOCK IT IN NOW!`;
     speakHostLine(warningMessage).then((played) => {
       if (played) {
         lowTimeWarningQuestionRef.current = questionKey;
       }
     });
-  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speakHostLine]);
+  }, [audioUnlocked, actingTeamRevealAnswer, actingTeamName, actingTeamId, currentQuestion, isLive, remaining, speakHostLine]);
+
+
 
   useEffect(() => {
-    if (!audioUnlocked || !isRevealed || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+    if (!audioUnlocked || !isRevealed || !currentQuestion || !actingTeamId || !actingTeamRevealAnswer) return;
 
-    const revealKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}-${concernTeamAnswer.selectedKey}-${currentQuestion.correctAnswer}`;
+    const revealKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${actingTeamId}-${actingTeamRevealAnswer.selectedKey}-${currentQuestion.correctAnswer}`;
     if (revealAnnouncementKeyRef.current === revealKey) return;
 
-    const isCorrectSelection = concernTeamAnswer.selectedKey === currentQuestion.correctAnswer;
+    const isCorrectSelection = actingTeamRevealAnswer.selectedKey === currentQuestion.correctAnswer;
     const correctOption = Array.isArray(currentQuestion.options)
       ? currentQuestion.options.find((opt: any) => opt?.key === currentQuestion.correctAnswer)
       : null;
@@ -296,9 +314,9 @@ export default function DisplayPage() {
       ? `The right answer is ${correctOption.key}. ${correctOption.text}.`
       : `The right answer is ${currentQuestion.correctAnswer}.`;
 
-    const selectedLine = concernTeamAnswer.selectedKey
-      ? `${concernTeamName} locked option ${concernTeamAnswer.selectedKey}.`
-      : `${concernTeamName} submitted an answer.`;
+    const selectedLine = actingTeamRevealAnswer.selectedKey
+      ? `${actingTeamName} locked option ${actingTeamRevealAnswer.selectedKey}.`
+      : `${actingTeamName} submitted an answer.`;
 
     const revealMessage = isCorrectSelection
       ? `${selectedLine} That is the right answer.`
@@ -309,7 +327,9 @@ export default function DisplayPage() {
         revealAnnouncementKeyRef.current = revealKey;
       }
     });
-  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speakHostLine]);
+  }, [audioUnlocked, actingTeamRevealAnswer, actingTeamName, actingTeamId, currentQuestion, isRevealed, speakHostLine]);
+
+
 
   if (loading && !data && !error) {
     return (
@@ -634,8 +654,9 @@ export default function DisplayPage() {
               <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
                 {currentQuestion?.options?.map((opt: any, idx: number) => {
                   const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
-                  const isConcernSelection = isRevealed && concernTeamAnswer?.selectedKey === opt.key;
-                  const isConcernWrong = isConcernSelection && !isCorrect;
+                  const isActingSelection = isRevealed && actingTeamRevealAnswer?.selectedKey === opt.key;
+                  const isActingWrong = isActingSelection && !isCorrect;
+
 
                   return (
                     <div
@@ -645,7 +666,8 @@ export default function DisplayPage() {
                         'shadow-[0_0_80px_rgba(0,0,0,0.35)]',
                         'transition-transform duration-300 hover:scale-[1.01]',
                         isCorrect ? 'border-emerald-200/45 bg-emerald-500/25' : '',
-                        isConcernWrong ? 'border-rose-200/45 bg-rose-500/25' : '',
+                        isActingWrong ? 'border-rose-200/45 bg-rose-500/25' : '',
+
                       ].join(' ')}
                       style={{ animationDelay: `${idx * 90}ms` }}
                     >
