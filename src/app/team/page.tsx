@@ -243,10 +243,11 @@ function TeamContent() {
               error: submissionError
             }}
             buzzer={{
-              isBuzzerMode: currentQuestion?.questionType === 'BUZZER' || currentState?.questionType === 'BUZZER',
+              isBuzzerMode: currentQuestion?.questionType === 'BUZZER' || currentState?.questionType === 'BUZZER' || currentState?.mode === 'BUZZER' || currentState?.gameMode === 'BUZZER',
               hasBuzz: currentState?.buzzOwnerTeamId === teamId,
               buzzOwnerTeamId: currentState?.buzzOwnerTeamId
             }}
+
             concernTeamId={currentState?.concernTeamId || (currentState?.session as any)?.concernTeamId}
           />
         )}

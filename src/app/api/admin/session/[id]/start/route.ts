@@ -11,7 +11,17 @@ export const POST = async (
     `/session/${encodeURIComponent(id)}/start`,
     (input) => {
       const payload = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-      return [payload, { autoStartTimer: payload.autoStartTimer }, {}];
+      return [
+        payload,
+        {
+          autoStartTimer: payload.autoStartTimer,
+          gameMode: payload.gameMode,
+          concernTeamId: payload.concernTeamId
+        },
+        { autoStartTimer: payload.autoStartTimer },
+        {}
+      ];
+
     },
     (path) => [
       path,

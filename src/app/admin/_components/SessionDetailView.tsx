@@ -100,21 +100,36 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
     // Hoisted State for Controls
     const [gameMode, setGameMode] = useState<'STANDARD' | 'BUZZER'>('STANDARD');
     const [concernTeamId, setConcernTeamId] = useState<string>('');
+    const lastMetaUpdateRef = useRef<number>(0);
+
 
     // Sync initial state once loaded
     useEffect(() => {
         if (details?.session) {
-            // Only sync if local state is uninitialized o ensure we don't overwrite user selection during polling
-            // But if the server says we are in BUZZER mode, we should probably respect it initially
-            if (!gameMode && details.session.gameMode) setGameMode(details.session.gameMode);
+            // Adopt server mode if local is uninitialized OR if they differ
+            // BUT: don't sync if we just performed a manual update in the last 5 seconds to avoid race conditions
+            const timeSinceUpdate = Date.now() - lastMetaUpdateRef.current;
+            if (timeSinceUpdate > 5000) {
+                if (details.session.gameMode && details.session.gameMode !== gameMode) {
+                    setGameMode(details.session.gameMode);
+                }
+            }
 
             // For concernTeamId, we generally want to persist the user's selection locally 
             // even if the server refreshes.
         }
-    }, [details?.session?.gameMode]); // Reduced dependency to avoid loops
+    }, [details?.session?.gameMode, details?.session?.currentQuestionId]); // Sync when server mode or question changes
+
+
 
     const handleGameModeChange = async (newMode: 'STANDARD' | 'BUZZER') => {
         setGameMode(newMode); // Optimistic update
+        lastMetaUpdateRef.current = Date.now();
+        if (newMode === 'BUZZER') {
+            setConcernTeamId('');
+        }
+
+
         try {
             // We need to fetch the current session meta to preserve other fields, 
             // but for now we might be able to patch just the gameMode if the API supports partial updates?
@@ -134,12 +149,27 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                 maxTeams: details.session.maxTeams,
                 theme: details.session.theme,
                 organizer: details.session.organizer,
-                gameMode: newMode
+                gameMode: newMode,
+                concernTeamId: newMode === 'BUZZER' ? null : details.session.concernTeamId
             };
 
+
             await postJson(`/api/admin/session/${encodeURIComponent(sessionId)}/meta`, payload);
+
+            // CRITICAL: If a question is already active, we MUST re-set it to update the active round's mode
+            // otherwise the candidate display will still see the old mode until 'Start' is clicked.
+            if (details?.session?.currentQuestionId) {
+                await handleSetActiveQuestion(details.session.currentQuestionId, newMode);
+            }
+
+            // If switching to BUZZER, clear concernTeamId to avoid confusing prompts
+            if (newMode === 'BUZZER') {
+                setConcernTeamId('');
+            }
+
             emitToast({ level: 'success', title: 'Mode Updated', message: `Switched to ${newMode} mode.` });
             fetchDetails();
+
         } catch (e) {
             emitToast({ level: 'error', title: 'Error', message: 'Failed to save game mode.' });
             // Revert on failure?
@@ -147,13 +177,17 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
         }
     };
 
-    const handleSetActiveQuestion = async (questionId: string) => {
+    const handleSetActiveQuestion = async (questionId: string, overrideMode?: 'STANDARD' | 'BUZZER') => {
+        const activeMode = overrideMode || gameMode;
         try {
             const payload: any = {
                 questionId,
+                gameMode: activeMode,
             };
 
-            if (gameMode === 'STANDARD' && concernTeamId) {
+
+
+            if (activeMode === 'STANDARD' && concernTeamId) {
                 payload.concernTeamId = concernTeamId;
                 payload.allowedTeamIds = [concernTeamId];
                 payload.allowedTeams = { teamIds: [concernTeamId] };

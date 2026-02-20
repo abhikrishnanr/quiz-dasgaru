@@ -137,8 +137,9 @@ export function QuizView({
                     )}
                     {buzzer.buzzOwnerTeamId && !buzzer.hasBuzz && (
                         <div className="text-slate-500">
-                            Team {buzzer.buzzOwnerTeamId} buzzed based. Wait for next turn.
+                            Team {buzzer.buzzOwnerTeamId} buzzed in! Wait for the next round.
                         </div>
+
                     )}
                 </div>
             )}

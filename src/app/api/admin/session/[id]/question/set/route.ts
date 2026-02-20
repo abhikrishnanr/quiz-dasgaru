@@ -35,7 +35,9 @@ export const POST = async (
           concernTeamId: payload.concernTeamId,
           allowedTeamIds,
           firstAnswerLocksAll: payload.firstAnswerLocksAll,
+          gameMode: payload.gameMode,
         },
+
         {
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
@@ -46,7 +48,9 @@ export const POST = async (
           questionId: payload.questionId,
           timerDurationSec: payload.timerDurationSec,
           concernTeamId: payload.concernTeamId,
+          gameMode: payload.gameMode,
         },
+
       ];
     },
     (path) => [

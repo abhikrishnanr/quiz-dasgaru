@@ -183,7 +183,9 @@ export function TeamGameClient() {
 
     // Standard Mode: Am I the concern team?
     const isStandard = gameMode === 'STANDARD';
-    const isConcernTeam = concernTeamId ? concernTeamId === myTeamId : true; // If none set, all can play (legacy fallback)
+    // In BUZZER mode, everyone is technically a concern team until someone buzzes
+    const isConcernTeam = isStandard ? (concernTeamId ? concernTeamId === myTeamId : true) : true;
+
 
     // Buzzer Mode: Do I have the buzz?
     const isBuzzer = gameMode === 'BUZZER';

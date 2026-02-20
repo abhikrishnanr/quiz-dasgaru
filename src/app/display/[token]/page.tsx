@@ -136,12 +136,14 @@ export default function DisplayPage() {
       return;
     }
 
-    const teamName = formatTeamName(session.concernTeamName) || 'all teams';
+    const isBuzzerMode = session?.gameMode === 'BUZZER';
+    const teamName = isBuzzerMode ? 'all teams' : (formatTeamName(session.concernTeamName) || 'all teams');
     const optionSpeech = Array.isArray(currentQuestion.options)
       ? currentQuestion.options.map((opt: any) => `${opt.key}. ${opt.text}`).join('. ')
       : '';
 
     const intro = `Question is for ${teamName}.`;
+
     const message = `${intro} Question: ${currentQuestion.text}. Options: ${optionSpeech}.`;
 
     isAnnouncingRef.current = true;
@@ -207,7 +209,10 @@ export default function DisplayPage() {
     concernTeamAnswer &&
     concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
 
-  const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
+  const concernTeamName = (session?.gameMode === 'BUZZER')
+    ? 'All Teams'
+    : (formatTeamName(session?.concernTeamName) || 'Concerned Team');
+
   const isQuestionActivated = isLive;
 
   useEffect(() => {
