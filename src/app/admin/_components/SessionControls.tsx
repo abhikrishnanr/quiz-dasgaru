@@ -7,6 +7,7 @@ import { emitToast } from "@/src/lib/ui/toast";
 import { generateDisplayToken } from "@/src/lib/security";
 import { getTTSAudio } from "@/src/services/aiService";
 import { formatTeamName } from "@/src/lib/format";
+import { addAiScore, loadAiScores, setAiScore } from '@/src/lib/aiChallengeScores';
 
 interface SessionControlsProps {
     sessionId: string;
@@ -14,8 +15,8 @@ interface SessionControlsProps {
     teams: AdminSessionDetails['teams'];
     onRefresh: () => void;
     variant?: 'default' | 'compact';
-    gameMode: 'STANDARD' | 'BUZZER' | null;
-    setGameMode: (mode: 'STANDARD' | 'BUZZER') => void;
+    gameMode: 'STANDARD' | 'BUZZER' | 'ASK_AI' | null;
+    setGameMode: (mode: 'STANDARD' | 'BUZZER' | 'ASK_AI') => void;
     concernTeamId: string;
     setConcernTeamId: (id: string) => void;
 }
@@ -34,6 +35,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
     // Live audio status polling from display page
     const [audioStatus, setAudioStatus] = useState<{ status: string; message: string; updatedAt: number }>({ status: 'IDLE', message: '', updatedAt: 0 });
     const [scoreboardActionLoading, setScoreboardActionLoading] = useState(false);
+    const [aiScoreMap, setAiScoreMap] = useState<Record<string, number>>({});
 
     useEffect(() => {
         if (!sessionId) return;
@@ -50,6 +52,10 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         const interval = setInterval(poll, 1000);
         return () => clearInterval(interval);
     }, [sessionId]);
+
+    useEffect(() => {
+        setAiScoreMap(loadAiScores());
+    }, [teams]);
 
     // Test audio trigger from admin
     const [isTestingAudio, setIsTestingAudio] = useState(false);
@@ -154,7 +160,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         runAction('Start', () => postJson(`/api/admin/session/${sessionId}/start`, {
             autoStartTimer: true,
             gameMode,
-            concernTeamId: gameMode === 'STANDARD' ? concernTeamId : null
+            concernTeamId: gameMode === 'BUZZER' ? null : concernTeamId
         }));
     };
 
@@ -183,6 +189,26 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         }
     };
 
+    const updateAiScore = (teamId: string, value: number) => {
+        const next = setAiScore(teamId, value);
+        setAiScoreMap({ ...next });
+    };
+
+    const handleAskAiMark = async (mark: 'RIGHT' | 'WRONG') => {
+        const selectedTeam = teams.find((t: any) => t.teamId === concernTeamId);
+        const selectedTeamName = formatTeamName(selectedTeam?.teamName) || `Team ${concernTeamId}`;
+        const basePayload: any = { askAiMark: mark };
+
+        if (mark === 'WRONG' && concernTeamId) {
+            const nextScores = addAiScore(concernTeamId, 20);
+            setAiScoreMap({ ...nextScores });
+            basePayload.askAiAnnouncement = { text: `Team ${selectedTeamName} gets 20 points.`, createdAt: Date.now() };
+        }
+
+        await runAction(`ASK AI ${mark}`, () => postJson(`/api/admin/session/${sessionId}/meta`, basePayload));
+    };
+
+
 
     if (variant === 'compact') {
         const selectedTeamName = formatTeamName(teams.find((t: any) => t.teamId === concernTeamId)?.teamName);
@@ -205,10 +231,16 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         >
                             Buzzer
                         </button>
+                        <button
+                            onClick={() => setGameMode('ASK_AI')}
+                            className={`flex-1 px-2 py-1.5 text-xs rounded-md transition-all uppercase font-black tracking-wide ${gameMode === 'ASK_AI' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            Ask AI
+                        </button>
                     </div>
 
                     {/* Team Badges for Standard Mode */}
-                    {!isLive && gameMode === 'STANDARD' && (
+                    {!isLive && (gameMode === 'STANDARD' || gameMode === 'ASK_AI') && (
                         <div className="flex flex-col gap-1.5 animate-in slide-in-from-top-2">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Team to Answer:</span>
                             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
@@ -324,7 +356,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                 <div className="flex items-center gap-2">
                     {!isLive && (
                         <button
-                            disabled={!!loadingAction || (gameMode === 'STANDARD' && !concernTeamId)}
+                            disabled={!!loadingAction || (gameMode !== 'BUZZER' && !concernTeamId)}
                             onClick={handleStart}
                             className={`flex-1 text-xs px-3 py-2 rounded font-bold shadow-sm flex items-center justify-center gap-1 transition-all ${gameMode === 'STANDARD'
                                 ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
@@ -332,7 +364,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                 }`}
                         >
                             <span>▶</span>
-                            {gameMode === 'STANDARD' && concernTeamId
+                            {gameMode !== 'BUZZER' && concernTeamId
                                 ? `START FOR ${selectedTeamName || 'TEAM'}`
                                 : gameMode === 'BUZZER' ? 'START BUZZER ROUND' : 'START ROUND'}
                         </button>
@@ -422,10 +454,16 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         >
                             Buzzer
                         </button>
+                        <button
+                            onClick={() => setGameMode('ASK_AI')}
+                            className={`flex-1 px-2 py-1.5 text-xs rounded-md transition-all uppercase font-black tracking-wide ${gameMode === 'ASK_AI' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+                        >
+                            Ask AI
+                        </button>
                     </div>
 
                     {/* Team Badges for Standard Mode */}
-                    {!isLive && gameMode === 'STANDARD' && (
+                    {!isLive && (gameMode === 'STANDARD' || gameMode === 'ASK_AI') && (
                         <div className="flex flex-col gap-2 animate-in slide-in-from-top-2">
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Target Team:</span>
                             <div className="grid grid-cols-2 gap-2">
@@ -537,11 +575,50 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         @keyframes progressIndeterminateD { 0% { width: 15%; margin-left: 0; } 50% { width: 50%; margin-left: 25%; } 100% { width: 15%; margin-left: 85%; } }
                     `}</style>
 
+
+                    {gameMode === 'ASK_AI' && (
+                        <div className="rounded-lg border border-emerald-300/30 bg-emerald-500/10 p-3 space-y-3">
+                            <div className="text-xs font-bold uppercase tracking-wider text-emerald-200">Ask AI Controls</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    disabled={!!loadingAction || !concernTeamId}
+                                    onClick={() => handleAskAiMark('RIGHT')}
+                                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
+                                >
+                                    RIGHT
+                                </button>
+                                <button
+                                    disabled={!!loadingAction || !concernTeamId}
+                                    onClick={() => handleAskAiMark('WRONG')}
+                                    className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50"
+                                >
+                                    WRONG (+20)
+                                </button>
+                            </div>
+                            <div>
+                                <div className="text-[10px] text-emerald-100/80 uppercase tracking-wider mb-2">AI Challenge Score Editor</div>
+                                <div className="space-y-2">
+                                    {teams.map((team: any) => (
+                                        <div key={`ai-score-${team.teamId}`} className="flex items-center justify-between gap-2 text-xs">
+                                            <span className="text-white/80 truncate">{formatTeamName(team.teamName)}</span>
+                                            <input
+                                                type="number"
+                                                value={aiScoreMap[team.teamId] ?? 0}
+                                                onChange={(event) => updateAiScore(team.teamId, Number(event.target.value || 0))}
+                                                className="w-24 rounded border border-white/20 bg-slate-900/70 px-2 py-1 text-right text-white"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="flex flex-col gap-2">
                         {!isLive && (
                             <button
-                                disabled={!!loadingAction || (gameMode === 'STANDARD' && !concernTeamId)}
+                                disabled={!!loadingAction || (gameMode !== 'BUZZER' && !concernTeamId)}
                                 onClick={handleStart}
                                 className={`w-full text-xs px-3 py-3 rounded-lg font-bold shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95 ${gameMode === 'STANDARD'
                                     ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
@@ -549,9 +626,9 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                                 <span className="text-lg">▶</span>
-                                {gameMode === 'STANDARD' && concernTeamId
+                                {gameMode !== 'BUZZER' && concernTeamId
                                     ? `START (${formatTeamName(teams.find((t: any) => t.teamId === concernTeamId)?.teamName)})`
-                                    : 'START ROUND'}
+                                    : gameMode === 'BUZZER' ? 'START BUZZER ROUND' : 'START ROUND'}
                             </button>
                         )}
 

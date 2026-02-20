@@ -16,7 +16,7 @@ export interface AdminSessionSummary {
     maxTeams?: number;
     theme?: 'light' | 'dark' | 'blue' | 'red';
     organizer?: string;
-    gameMode?: 'STANDARD' | 'BUZZER';
+    gameMode?: 'STANDARD' | 'BUZZER' | 'ASK_AI';
 }
 
 export interface AdminSessionDetails {
@@ -38,8 +38,12 @@ export interface AdminSessionDetails {
         maxTeams?: number;
         theme?: 'light' | 'dark' | 'blue' | 'red';
         organizer?: string;
-        gameMode?: 'STANDARD' | 'BUZZER';
+        gameMode?: 'STANDARD' | 'BUZZER' | 'ASK_AI';
         concernTeamId?: string;
+        askAiQuestion?: null | { teamId: string; text: string; createdAt: number };
+        askAiAnswer?: null | { text: string; createdAt: number; outOfDomain?: boolean };
+        askAiMark?: null | 'RIGHT' | 'WRONG';
+        askAiAnnouncement?: null | { text: string; createdAt: number };
         buzzOwnerTeamId?: string;
         displayToken?: string;
     };

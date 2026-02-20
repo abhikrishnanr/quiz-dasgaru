@@ -24,6 +24,7 @@ export function TeamGameClient() {
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasPassed, setHasPassed] = useState(false); // Tracks if team passed this question
+    const [askAiText, setAskAiText] = useState('');
 
     // Sound integration
     const { play } = useGameSounds();
@@ -151,8 +152,44 @@ export function TeamGameClient() {
 
 
 
+    const submitAskAiQuestion = async () => {
+        if (!token || !isAskAiConcernTeam) return;
+        const finalText = askAiText.trim();
+        if (!finalText) {
+            alert('Please enter a question before sending.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const res = await fetch('/api/team/ask-ai', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: finalText }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Failed to send ASK_AI question.');
+                return;
+            }
+
+            setAskAiText('');
+        } catch (error) {
+            console.error('ASK_AI submit error', error);
+            alert('Failed to send ASK_AI question.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+
     if (loading) {
-        return (
+    
+    return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
             </div>
@@ -180,6 +217,8 @@ export function TeamGameClient() {
     const buzzOwnerTeamId = gameState?.buzzOwnerTeamId;
 
     const myTeamId = auth?.teamId;
+    const isAskAiMode = gameMode === 'ASK_AI';
+    const isAskAiConcernTeam = concernTeamId ? concernTeamId === myTeamId : false;
 
     // Standard Mode: Am I the concern team?
     const isStandard = gameMode === 'STANDARD';
@@ -321,7 +360,37 @@ export function TeamGameClient() {
             )}
 
             <main className="flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full flex flex-col justify-center">
-                {!question ? (
+                {isAskAiMode ? (
+                    <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl space-y-4">
+                        <h2 className="text-2xl font-bold text-emerald-300">ASK AI ROUND</h2>
+                        {!isAskAiConcernTeam ? (
+                            <p className="text-slate-300">Waiting… Team {gameState?.concernTeamName || concernTeamId || 'Selected Team'} is asking now.</p>
+                        ) : (
+                            <>
+                                <textarea
+                                    value={askAiText}
+                                    onChange={(event) => setAskAiText(event.target.value)}
+                                    className="w-full min-h-40 rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white"
+                                    placeholder="Type your question for ASK AI round..."
+                                    disabled={isSubmitting}
+                                />
+                                <button
+                                    onClick={submitAskAiQuestion}
+                                    disabled={isSubmitting || !askAiText.trim()}
+                                    className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold"
+                                >
+                                    Send
+                                </button>
+                            </>
+                        )}
+                        {gameState?.askAiAnswer?.text && (
+                            <div className="rounded-xl border border-slate-600 bg-slate-900/70 p-4">
+                                <p className="text-xs uppercase text-slate-400 mb-1">AI Answer</p>
+                                <p className="text-slate-100">{gameState.askAiAnswer.text}</p>
+                            </div>
+                        )}
+                    </div>
+                ) : !question ? (
                     <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-xl text-center">
                         <h2 className="text-2xl font-light text-slate-300 mb-6">Waiting for Game Master...</h2>
                         <div className="flex justify-center gap-2">

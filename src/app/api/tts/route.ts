@@ -5,7 +5,7 @@ import crypto from 'crypto';
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY?.trim();
 const ELEVENLABS_BASE_URL = process.env.ELEVENLABS_BASE_URL?.trim() || 'https://api.elevenlabs.io';
-const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID?.trim() || 'EXAVITQu4vr4xnSDxMaL';
+const DEFAULT_VOICE_ID = process.env.ELEVENLABS_VOICE_ID?.trim();
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID?.trim() || 'eleven_flash_v2_5';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT?.trim() || 'mp3_44100_128';
 const UPSTREAM_FAILURE_BACKOFF_BASE_MS = Number(process.env.ELEVENLABS_FAILURE_BACKOFF_BASE_MS || 5000);
@@ -80,6 +80,13 @@ export async function POST(req: NextRequest) {
     if (!ELEVENLABS_API_KEY) {
       return NextResponse.json(
         { error: 'ELEVENLABS_API_KEY is not configured on the server.' },
+        { status: 500 },
+      );
+    }
+
+    if (!DEFAULT_VOICE_ID) {
+      return NextResponse.json(
+        { error: 'ELEVENLABS_VOICE_ID is not configured on the server.' },
         { status: 500 },
       );
     }
@@ -161,6 +168,7 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const errText = await upstream.text();
+      console.error('[TTS] ElevenLabs upstream error', { status: upstream.status, details: errText || upstream.statusText });
       const backoffMs = noteUpstreamFailure();
 
       const status = upstream.status === 429 ? 503 : upstream.status;
@@ -222,6 +230,18 @@ export async function GET(): Promise<NextResponse<TTSConnectionCheck>> {
         configured: false,
         baseUrl: ELEVENLABS_BASE_URL,
         details: 'ELEVENLABS_API_KEY is not configured.',
+      },
+      { status: 500 },
+    );
+  }
+
+  if (!DEFAULT_VOICE_ID) {
+    return NextResponse.json(
+      {
+        ok: false,
+        configured: false,
+        baseUrl: ELEVENLABS_BASE_URL,
+        details: 'ELEVENLABS_VOICE_ID is not configured.',
       },
       { status: 500 },
     );
