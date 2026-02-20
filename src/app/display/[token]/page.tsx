@@ -27,6 +27,7 @@ export default function DisplayPage() {
   const welcomeAnnouncementPlayedRef = useRef(false);
   const [introOverlayDismissed, setIntroOverlayDismissed] = useState(false);
   const lastScoreboardCommandNonceRef = useRef(0);
+  const scoreboardAnnouncementKeyRef = useRef('');
 
   const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
@@ -359,6 +360,30 @@ export default function DisplayPage() {
     });
   }, [audioUnlocked, actingTeamRevealAnswer, actingTeamName, actingTeamId, currentQuestion, isRevealed, speakHostLine]);
 
+  useEffect(() => {
+    if (!audioUnlocked || !isScorePanelOpen || !leaderboard.length) return;
+
+    const topTeams = leaderboard.slice(0, 3);
+    const announcementKey = topTeams
+      .map((team: any, index: number) => `${index + 1}-${team?.name ?? 'Team'}-${team?.total ?? 0}`)
+      .join('|');
+
+    if (!announcementKey || scoreboardAnnouncementKeyRef.current === announcementKey) {
+      return;
+    }
+
+    const announcementLine = topTeams
+      .map((team: any, index: number) => `${index + 1}. ${formatTeamName(team?.name) || 'Team'} with ${team?.total ?? 0} points`)
+      .join('. ');
+
+    const summary = `Current scoreboard standings. ${announcementLine}.`;
+    speakHostLine(summary).then((played) => {
+      if (played) {
+        scoreboardAnnouncementKeyRef.current = announcementKey;
+      }
+    });
+  }, [audioUnlocked, isScorePanelOpen, leaderboard, speakHostLine]);
+
 
 
   if (loading && !data && !error) {
@@ -604,28 +629,28 @@ export default function DisplayPage() {
                 </div>
               )}
 
-              <div className="mt-7 rounded-[2rem] border border-white/15 bg-white/[0.04] overflow-hidden">
+              <div className="mt-7 rounded-[2rem] border border-white/15 bg-gradient-to-b from-cyan-500/[0.12] via-indigo-500/[0.10] to-violet-500/[0.08] overflow-hidden shadow-[0_0_90px_rgba(56,189,248,0.2)]">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-center border-collapse">
                     <thead>
                       <tr className="bg-white/8 border-b border-white/10 text-[10px] uppercase tracking-[0.24em] text-white/60 font-black">
                         <th className="px-6 py-4 w-20 text-center">Rank</th>
                         <th className="px-6 py-4">Team</th>
-                        <th className="px-6 py-4 text-right">Standard</th>
-                        <th className="px-6 py-4 text-right">Buzzer</th>
-                        <th className="px-6 py-4 text-right text-amber-200">Total Points</th>
+                        <th className="px-6 py-4 text-center">Standard</th>
+                        <th className="px-6 py-4 text-center">Buzzer</th>
+                        <th className="px-6 py-4 text-center text-amber-200">Total Points</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {leaderboard.map((team: any, index: number) => (
                         <tr key={index} className="transition-all duration-300 hover:bg-white/8">
-                          <td className="px-6 py-5 text-center font-mono font-black text-white/70">{index + 1}</td>
-                          <td className="px-6 py-5">
-                            <div className="font-black text-white text-lg md:text-2xl tracking-tight">{formatTeamName(team.name)}</div>
+                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-white/80">{index + 1}</td>
+                          <td className="px-6 py-6 text-center">
+                            <div className="font-black text-white text-2xl md:text-5xl tracking-[0.02em] drop-shadow-[0_0_30px_rgba(125,211,252,0.35)]">{formatTeamName(team.name)}</div>
                           </td>
-                          <td className="px-6 py-5 text-right font-mono text-white/70 text-lg">{team.standard}</td>
-                          <td className="px-6 py-5 text-right font-mono text-white/70 text-lg">{team.buzzer}</td>
-                          <td className="px-6 py-5 text-right font-mono font-black text-2xl md:text-3xl text-amber-200 bg-amber-300/[0.07] tabular-nums">{team.total}</td>
+                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-cyan-100 tabular-nums">{team.standard}</td>
+                          <td className="px-6 py-6 text-center font-mono font-black text-2xl md:text-4xl text-fuchsia-100 tabular-nums">{team.buzzer}</td>
+                          <td className="px-6 py-6 text-center font-mono font-black text-4xl md:text-6xl text-amber-200 bg-amber-300/[0.10] tabular-nums">{team.total}</td>
                         </tr>
                       ))}
                     </tbody>
