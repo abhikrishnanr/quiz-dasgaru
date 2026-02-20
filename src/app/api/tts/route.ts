@@ -22,6 +22,27 @@ type TTSRequestBody = {
   languageCode?: string;
 };
 
+function resolveAudioResponseMeta(outputFormat: string): { extension: string; contentType: string; accept: string } {
+  if (outputFormat.startsWith('pcm_')) {
+    const sampleRate = outputFormat.split('_')[1] || '24000';
+    return {
+      extension: 'pcm',
+      contentType: `audio/L16; rate=${sampleRate}; channels=1`,
+      accept: 'audio/pcm',
+    };
+  }
+
+  if (outputFormat.startsWith('mp3_')) {
+    return { extension: 'mp3', contentType: 'audio/mpeg', accept: 'audio/mpeg' };
+  }
+
+  if (outputFormat.startsWith('opus_')) {
+    return { extension: 'opus', contentType: 'audio/ogg; codecs=opus', accept: 'audio/ogg' };
+  }
+
+  return { extension: 'audio', contentType: 'application/octet-stream', accept: 'audio/*' };
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!ELEVENLABS_API_KEY) {
@@ -46,21 +67,21 @@ export async function POST(req: NextRequest) {
     const resolvedVoiceId = voiceId?.trim() || DEFAULT_VOICE_ID;
     const resolvedModelId = modelId?.trim() || DEFAULT_MODEL_ID;
     const resolvedOutputFormat = outputFormat?.trim() || DEFAULT_OUTPUT_FORMAT;
+    const audioMeta = resolveAudioResponseMeta(resolvedOutputFormat);
 
     const hash = crypto
       .createHash('md5')
       .update(`${text}:${resolvedVoiceId}:${resolvedModelId}:${resolvedOutputFormat}:${languageCode || ''}`)
       .digest('hex');
 
-    const extension = resolvedOutputFormat.startsWith('pcm_') ? 'pcm' : 'mp3';
-    const filename = `${hash}.${extension}`;
+    const filename = `${hash}.${audioMeta.extension}`;
     const filePath = path.join(CACHE_DIR, filename);
 
     if (fs.existsSync(filePath)) {
       const fileBuffer = fs.readFileSync(filePath);
       return new NextResponse(new Uint8Array(fileBuffer), {
         headers: {
-          'Content-Type': extension === 'pcm' ? 'audio/pcm' : 'audio/mpeg',
+          'Content-Type': audioMeta.contentType,
           'Content-Length': fileBuffer.length.toString(),
           'X-Cache': 'HIT',
         },
@@ -77,7 +98,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
         'Content-Type': 'application/json',
-        Accept: 'audio/mpeg',
+        Accept: audioMeta.accept,
       },
       body: JSON.stringify({
         text,
@@ -99,12 +120,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const upstreamContentType = upstream.headers.get('content-type') || audioMeta.contentType;
+
     const audioBuffer = Buffer.from(await upstream.arrayBuffer());
     fs.writeFileSync(filePath, audioBuffer);
 
     return new NextResponse(new Uint8Array(audioBuffer), {
       headers: {
-        'Content-Type': extension === 'pcm' ? 'audio/pcm' : 'audio/mpeg',
+        'Content-Type': upstreamContentType,
         'Content-Length': audioBuffer.length.toString(),
         'X-Cache': 'MISS',
       },

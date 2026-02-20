@@ -8,7 +8,7 @@ const API_KEYS = [
 ].filter((k): k is string => !!k?.trim());
 
 const TEXT_MODEL = 'gemini-2.5-flash';
-const CACHE_PREFIX = 'ai-host-tts:';
+const CACHE_PREFIX = 'ai-host-tts:v2:';
 const TTS_LOG_PREFIX = '[ElevenLabs TTS]';
 const GEMINI_LOG_PREFIX = '[Gemini API]';
 
