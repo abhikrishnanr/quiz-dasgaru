@@ -28,6 +28,7 @@ export default function DisplayPage() {
   const [introOverlayDismissed, setIntroOverlayDismissed] = useState(false);
   const lastScoreboardCommandNonceRef = useRef(0);
   const scoreboardAnnouncementKeyRef = useRef('');
+  const [scoreboardCommandNonce, setScoreboardCommandNonce] = useState(0);
 
   const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
@@ -214,6 +215,7 @@ export default function DisplayPage() {
         if (!nonce || nonce === lastScoreboardCommandNonceRef.current) return;
 
         lastScoreboardCommandNonceRef.current = nonce;
+        setScoreboardCommandNonce(nonce);
         setIsScorePanelOpen(Boolean(command?.isOpen));
 
         if (command?.stopAudio) {
@@ -252,6 +254,12 @@ export default function DisplayPage() {
     actingTeamId &&
     actingTeamRevealAnswer &&
     actingTeamRevealAnswer.selectedKey !== currentQuestion?.correctAnswer;
+
+  const showCorrectAnswer =
+    isRevealed &&
+    actingTeamId &&
+    actingTeamRevealAnswer &&
+    actingTeamRevealAnswer.selectedKey === currentQuestion?.correctAnswer;
 
 
   const concernTeamName = (session?.gameMode === 'BUZZER')
@@ -364,9 +372,11 @@ export default function DisplayPage() {
     if (!audioUnlocked || !isScorePanelOpen || !leaderboard.length) return;
 
     const topTeams = leaderboard.slice(0, 3);
-    const announcementKey = leaderboard
+    const leaderboardSnapshotKey = leaderboard
       .map((team: any, index: number) => `${index + 1}-${team?.name ?? 'Team'}-${team?.total ?? 0}`)
       .join('|');
+
+    const announcementKey = `${scoreboardCommandNonce}-${leaderboardSnapshotKey}`;
 
     if (!announcementKey || scoreboardAnnouncementKeyRef.current === announcementKey) {
       return;
@@ -384,7 +394,7 @@ export default function DisplayPage() {
         scoreboardAnnouncementKeyRef.current = announcementKey;
       }
     });
-  }, [audioUnlocked, isScorePanelOpen, leaderboard, speakHostLine]);
+  }, [audioUnlocked, isScorePanelOpen, leaderboard, scoreboardCommandNonce, speakHostLine]);
 
 
 
@@ -498,6 +508,15 @@ export default function DisplayPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none animate-in fade-in zoom-in duration-500">
           <div className="bg-red-600/90 backdrop-blur-md border-y-8 border-red-400 text-white text-6xl md:text-8xl font-black uppercase tracking-widest px-20 py-16 shadow-[0_0_150px_rgba(220,38,38,0.8)] transform -rotate-2">
             WRONG ANSWER
+          </div>
+        </div>
+      )}
+
+      {/* ─── Right Answer Overlay ─── */}
+      {showCorrectAnswer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none animate-in fade-in zoom-in duration-500">
+          <div className="bg-emerald-600/90 backdrop-blur-md border-y-8 border-emerald-300 text-white text-6xl md:text-8xl font-black uppercase tracking-widest px-20 py-16 shadow-[0_0_150px_rgba(16,185,129,0.8)] transform rotate-2">
+            RIGHT ANSWER
           </div>
         </div>
       )}
