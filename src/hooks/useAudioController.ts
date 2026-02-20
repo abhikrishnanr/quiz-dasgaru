@@ -227,52 +227,7 @@ export function useAudioController() {
       try {
         const audio = await getTTSAudio(text);
         if (!audio) {
-          console.warn('[AudioController] Server TTS failed or rate-limited. Falling back to browser native TTS.');
-
-          // Fallback: Use browser's native TTS
-          if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.cancel(); // Clear any queued speech
-
-            const speakNative = () => new Promise<boolean>((resolve) => {
-              const utterance = new SpeechSynthesisUtterance(text);
-              utterance.rate = 1.0;
-              utterance.pitch = 1.0;
-
-              const voices = window.speechSynthesis.getVoices();
-              const preferredVoice = voices.find((v) =>
-                (v.name.includes('India') && v.name.includes('English')) ||
-                v.name.includes('Hindi') ||
-                v.name.includes('Heera') ||
-                (v.name.includes('Google') && v.name.includes('Female')) ||
-                v.name.includes('Zira') ||
-                v.name.includes('Samantha')
-              ) || voices[0];
-
-              if (preferredVoice) utterance.voice = preferredVoice;
-
-              utterance.onend = () => resolve(true);
-              utterance.onerror = () => resolve(true); // Don't block app on error
-
-              window.speechSynthesis.speak(utterance);
-            });
-
-            // Ensure voices are loaded (Chrome/Edge async loading)
-            if (window.speechSynthesis.getVoices().length === 0) {
-              await new Promise<void>((resolve) => {
-                const onVoicesChanged = () => {
-                  window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-                  resolve();
-                };
-                window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
-                setTimeout(resolve, 1000); // Timeout if event never fires
-              });
-            }
-
-            await speakNative();
-            setIsFetching(false);
-            return true; // Count as "played"
-          }
-
+          console.error('[AudioController] ElevenLabs TTS unavailable; skipping speech playback (no browser/Gemini fallback).');
           setIsFetching(false);
           return false;
         }
