@@ -74,6 +74,7 @@ export async function GET(
 
         // Setup scores map
         const teamScores: Record<string, {
+            teamId: string;
             name: string;
             standard: number;
             buzzer: number;
@@ -82,6 +83,7 @@ export async function GET(
 
         teams.forEach((t: any) => {
             teamScores[t.teamId] = {
+                teamId: t.teamId,
                 name: t.teamName,
                 standard: 0,
                 buzzer: 0,
@@ -177,6 +179,10 @@ export async function GET(
                 concernTeamName: teamScores[sessionData.session.concernTeamId]?.name || null,
                 buzzOwnerTeamId: sessionData.session.buzzOwnerTeamId,
                 buzzOwnerTeamName: teamScores[sessionData.session.buzzOwnerTeamId]?.name || null,
+                askAiQuestion: sessionData.session.askAiQuestion || null,
+                askAiAnswer: sessionData.session.askAiAnswer || null,
+                askAiMark: sessionData.session.askAiMark || null,
+                askAiAnnouncement: sessionData.session.askAiAnnouncement || null,
             },
 
             currentQuestion: sanitizedQuestion,

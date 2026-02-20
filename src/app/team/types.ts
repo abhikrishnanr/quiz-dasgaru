@@ -42,8 +42,13 @@ export interface QuizCurrentState {
     phase?: string;
     questionType?: string;
     // New fields
-    gameMode?: 'STANDARD' | 'BUZZER';
+    gameMode?: 'STANDARD' | 'BUZZER' | 'ASK_AI';
     concernTeamId?: string;
+    concernTeamName?: string;
+    askAiQuestion?: null | { teamId: string; text: string; createdAt: number };
+    askAiAnswer?: null | { text: string; createdAt: number; outOfDomain?: boolean };
+    askAiMark?: null | 'RIGHT' | 'WRONG';
+    askAiAnnouncement?: null | { text: string; createdAt: number };
     session?: {
         state: string;
         question?: Question;
