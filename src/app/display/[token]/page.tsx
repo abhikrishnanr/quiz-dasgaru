@@ -29,6 +29,86 @@ export default function DisplayPage() {
   const lastScoreboardCommandNonceRef = useRef(0);
   const scoreboardAnnouncementKeyRef = useRef('');
   const [scoreboardCommandNonce, setScoreboardCommandNonce] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const [isMicRecording, setIsMicRecording] = useState(false);
+  const [micError, setMicError] = useState('');
+
+  const stopMicRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+
+    const stream = micStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
+
+    mediaRecorderRef.current = null;
+    setIsMicRecording(false);
+  }, []);
+
+  const startMicRecording = useCallback(async () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const msg = 'Microphone recording is not supported in this browser.';
+      console.error('[Display Mic] ' + msg);
+      setMicError(msg);
+      return;
+    }
+
+    try {
+      stopMicRecording();
+      setMicError('');
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event: Event) => {
+        const mediaError = (event as Event & { error?: { message?: string } }).error;
+        const reason = mediaError?.message || 'Unknown microphone recording error.';
+        console.error('[Display Mic] Recorder error:', mediaError || event);
+        setMicError(reason);
+      };
+
+      recorder.onstart = () => {
+        setIsMicRecording(true);
+        console.info('[Display Mic] Recording started.');
+      };
+
+      recorder.onstop = () => {
+        setIsMicRecording(false);
+        const totalSize = chunks.reduce((acc, chunk) => acc + chunk.size, 0);
+        if (!totalSize) {
+          console.error('[Display Mic] Recording stopped but no audio data was captured.');
+          setMicError('No audio captured. Check microphone permissions/input device.');
+          return;
+        }
+        console.info('[Display Mic] Recording captured.', { bytes: totalSize, chunks: chunks.length });
+      };
+
+      recorder.start(250);
+    } catch (error) {
+      console.error('[Display Mic] Failed to start microphone recording:', error);
+      setMicError(error instanceof Error ? error.message : 'Unable to access microphone.');
+      stopMicRecording();
+    }
+  }, [stopMicRecording]);
 
   const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
@@ -39,6 +119,18 @@ export default function DisplayPage() {
     } catch { /* ignore */ }
     setAudioUnlocked(true);
   }, [unlock]);
+
+  useEffect(() => {
+    if (!audioUnlocked) {
+      return;
+    }
+
+    void startMicRecording();
+
+    return () => {
+      stopMicRecording();
+    };
+  }, [audioUnlocked, startMicRecording, stopMicRecording]);
 
   const pushHostLine = useCallback((line: string) => {
     const normalizedLine = line.trim();
@@ -591,6 +683,20 @@ export default function DisplayPage() {
       </div>
 
       <div className="fixed right-6 top-6 z-40 flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => {
+            if (isMicRecording) {
+              stopMicRecording();
+            } else {
+              void startMicRecording();
+            }
+          }}
+          className="hudPill rounded-full border border-white/10 bg-white/6 backdrop-blur-xl px-6 py-3 text-[10px] font-black uppercase tracking-[0.32em] text-white/90 hover:bg-white/10 transition shadow-[0_0_60px_rgba(90,220,255,0.10)]"
+        >
+          {isMicRecording ? 'Mic On' : 'Mic Off'}
+        </button>
+
         {/* Scoreboard */}
         <button
           type="button"
@@ -605,6 +711,12 @@ export default function DisplayPage() {
           {String(roundLabel).replaceAll('_', ' ')} ROUND
         </div>
       </div>
+
+      {micError && (
+        <div className="fixed right-6 top-24 z-40 max-w-sm rounded-2xl border border-red-400/40 bg-red-950/50 px-4 py-3 text-xs font-semibold text-red-100 shadow-[0_0_35px_rgba(248,113,113,0.3)]">
+          Mic error: {micError}
+        </div>
+      )}
 
       {/* Countdown (top center) */}
       {isLive && (
