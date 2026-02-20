@@ -16,6 +16,8 @@ export default function DisplayPage() {
   const [errorPayload, setErrorPayload] = useState<any>(null);
   const [lastAnnouncedQuestionKey, setLastAnnouncedQuestionKey] = useState('');
   const isAnnouncingRef = useRef(false);
+  const revealAnnouncementKeyRef = useRef('');
+  const lowTimeWarningQuestionRef = useRef('');
   const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
   const { speak, isFetching, isSpeaking, unlock } = useAudioController();
@@ -286,6 +288,50 @@ export default function DisplayPage() {
     concernTeamAnswer &&
     concernTeamAnswer.selectedKey !== currentQuestion?.correctAnswer;
 
+  const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
+
+  useEffect(() => {
+    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
+
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+
+    if (remaining >= 10 || remaining <= 0) {
+      if (remaining >= 10) {
+        lowTimeWarningQuestionRef.current = '';
+      }
+      return;
+    }
+
+    if (lowTimeWarningQuestionRef.current === questionKey) return;
+
+    const warningMessage = `TIME IS RUNNING OUT FOR ${concernTeamName.toUpperCase()}! LOCK IT IN NOW!`;
+    speak(warningMessage).then((played) => {
+      if (played) {
+        pushHostLine(warningMessage);
+        lowTimeWarningQuestionRef.current = questionKey;
+      }
+    });
+  }, [audioUnlocked, concernTeamName, currentQuestion, isLive, remaining, session?.concernTeamId, speak]);
+
+  useEffect(() => {
+    if (!audioUnlocked || !isRevealed || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+
+    const revealKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}-${concernTeamAnswer.selectedKey}-${currentQuestion.correctAnswer}`;
+    if (revealAnnouncementKeyRef.current === revealKey) return;
+
+    const isCorrectSelection = concernTeamAnswer.selectedKey === currentQuestion.correctAnswer;
+    const revealMessage = isCorrectSelection
+      ? `${concernTeamName.toUpperCase()}, THAT IS ABSOLUTELY CORRECT! FANTASTIC JOB! KEEP THE MOMENTUM GOING!`
+      : `${concernTeamName.toUpperCase()}, THAT IS WRONG! DON'T DROP YOUR ENERGY — COME BACK STRONGER ON THE NEXT QUESTION!`;
+
+    speak(revealMessage).then((played) => {
+      if (played) {
+        revealAnnouncementKeyRef.current = revealKey;
+        pushHostLine(revealMessage);
+      }
+    });
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isRevealed, session?.concernTeamId, speak]);
+
   return (
     <div className="display-scope relative min-h-screen w-full overflow-hidden bg-[#071027] text-white">
       {/* ─── Wrong Answer Overlay ─── */}
@@ -487,6 +533,8 @@ export default function DisplayPage() {
               <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
                 {currentQuestion?.options?.map((opt: any, idx: number) => {
                   const isCorrect = isRevealed && opt.key === currentQuestion.correctAnswer;
+                  const isConcernSelection = isRevealed && concernTeamAnswer?.selectedKey === opt.key;
+                  const isConcernWrong = isConcernSelection && !isCorrect;
 
                   return (
                     <div
@@ -495,7 +543,8 @@ export default function DisplayPage() {
                         'optIn relative rounded-[2.6rem] border border-white/10 bg-white/[0.03] backdrop-blur-2xl',
                         'shadow-[0_0_80px_rgba(0,0,0,0.35)]',
                         'transition-transform duration-300 hover:scale-[1.01]',
-                        isCorrect ? 'border-emerald-200/30 bg-emerald-400/10' : '',
+                        isCorrect ? 'border-emerald-200/45 bg-emerald-500/25' : '',
+                        isConcernWrong ? 'border-rose-200/45 bg-rose-500/25' : '',
                       ].join(' ')}
                       style={{ animationDelay: `${idx * 90}ms` }}
                     >
