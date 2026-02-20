@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { useAudioController } from '@/src/hooks/useAudioController';
 import AIHostAvatar from '@/src/components/AIHostAvatar';
 import { formatTeamName } from '@/src/lib/format';
+import { getAiScore, loadAiScores } from '@/src/lib/aiChallengeScores';
+import { isInAllowedDomain } from '@/src/lib/askAiDomain';
 
 export default function DisplayPage() {
   const params = useParams();
@@ -29,6 +31,10 @@ export default function DisplayPage() {
   const lastScoreboardCommandNonceRef = useRef(0);
   const scoreboardAnnouncementKeyRef = useRef('');
   const [scoreboardCommandNonce, setScoreboardCommandNonce] = useState(0);
+  const speechQueueRef = useRef(Promise.resolve());
+  const askAiHandledQuestionRef = useRef(0);
+  const askAiHandledAnnouncementRef = useRef(0);
+  const [aiScores, setAiScores] = useState<Record<string, number>>({});
 
   const welcomeAnnouncement = 'Welcome all, I am Bodhini, the AI quiz core of the Digital University Kerala. Today we are going for 6 rounds of quiz competition. 4 standard rounds, 1 buzzer round and one Ask the Ai round. There is no negative marking. In standard roundss each team is asked a question and have option to pass the question. In buzzer round the first team who busses the right answer gets the marks. In AI round you have the exciting opportunity to asked me questions related to the domains shared to you. If I fail to answer you will get double points! So good luck teams let\'s starts the quiz "the balltje of brains against AI" ....  Ok let\'s start with the standard rounds.';
 
@@ -51,20 +57,26 @@ export default function DisplayPage() {
   }, []);
 
   const speakHostLine = useCallback(async (line: string) => {
-    if (isSpeakingHostRef.current || isFetching || isSpeaking) {
-      return false;
-    }
-
-    isSpeakingHostRef.current = true;
-    try {
-      const played = await speak(line);
-      if (played) {
-        pushHostLine(line);
+    const runSpeech = async () => {
+      if (isSpeakingHostRef.current || isFetching || isSpeaking) {
+        return false;
       }
-      return played;
-    } finally {
-      isSpeakingHostRef.current = false;
-    }
+
+      isSpeakingHostRef.current = true;
+      try {
+        const played = await speak(line);
+        if (played) {
+          pushHostLine(line);
+        }
+        return played;
+      } finally {
+        isSpeakingHostRef.current = false;
+      }
+    };
+
+    const task = speechQueueRef.current.then(runSpeech, runSpeech);
+    speechQueueRef.current = task.then(() => undefined, () => undefined);
+    return task;
   }, [isFetching, isSpeaking, pushHostLine, speak]);
 
   useEffect(() => {
@@ -106,9 +118,27 @@ export default function DisplayPage() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    setAiScores(loadAiScores());
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'ai_challenge_scores_v1') {
+        setAiScores(loadAiScores());
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const session = data?.session;
   const currentQuestion = data?.currentQuestion;
   const leaderboard = data?.leaderboard ?? [];
+  const leaderboardWithAi = leaderboard.map((team: any) => {
+    const teamId = team?.teamId || team?.id || '';
+    const aiChallenge = teamId ? Number(aiScores[teamId] ?? getAiScore(teamId)) : 0;
+    return { ...team, aiChallenge, grandTotal: Number(team?.total ?? 0) + aiChallenge };
+  }).sort((a: any, b: any) => b.grandTotal - a.grandTotal);
   const recentAnswers = data?.recentAnswers ?? [];
   const isLive = session?.questionState === 'LIVE';
   const isLocked = session?.questionState === 'LOCKED';
@@ -369,10 +399,10 @@ export default function DisplayPage() {
   }, [audioUnlocked, actingTeamRevealAnswer, actingTeamName, actingTeamId, currentQuestion, isRevealed, speakHostLine]);
 
   useEffect(() => {
-    if (!audioUnlocked || !isScorePanelOpen || !leaderboard.length) return;
+    if (!audioUnlocked || !isScorePanelOpen || !leaderboardWithAi.length) return;
 
-    const topTeams = leaderboard.slice(0, 3);
-    const leaderboardSnapshotKey = leaderboard
+    const topTeams = leaderboardWithAi.slice(0, 3);
+    const leaderboardSnapshotKey = leaderboardWithAi
       .map((team: any, index: number) => `${index + 1}-${team?.name ?? 'Team'}-${team?.total ?? 0}`)
       .join('|');
 
@@ -382,7 +412,7 @@ export default function DisplayPage() {
       return;
     }
 
-    const announcementLine = leaderboard
+    const announcementLine = leaderboardWithAi
       .map((team: any) => `${formatTeamName(team?.name) || 'Team'} has ${team?.total ?? 0} total points`)
       .join('. ');
 
@@ -394,7 +424,68 @@ export default function DisplayPage() {
         scoreboardAnnouncementKeyRef.current = announcementKey;
       }
     });
-  }, [audioUnlocked, isScorePanelOpen, leaderboard, scoreboardCommandNonce, speakHostLine]);
+  }, [audioUnlocked, isScorePanelOpen, leaderboardWithAi, scoreboardCommandNonce, speakHostLine]);
+
+
+  useEffect(() => {
+    if (!audioUnlocked || session?.gameMode !== 'ASK_AI') return;
+    const askAiQuestion = session?.askAiQuestion;
+    if (!askAiQuestion?.createdAt || askAiHandledQuestionRef.current === askAiQuestion.createdAt) return;
+
+    askAiHandledQuestionRef.current = askAiQuestion.createdAt;
+
+    const teamName = formatTeamName(session?.concernTeamName) || askAiQuestion.teamId || 'Team';
+
+    const run = async () => {
+      await speakHostLine(`Question is for Team ${teamName}. Team ${teamName} asks: ${askAiQuestion.text}`);
+
+      if (!isInAllowedDomain(askAiQuestion.text)) {
+        const outText = 'Sorry, that question is out of the domain.';
+        await fetch(`/api/admin/session/${encodeURIComponent(session.sessionId)}/meta`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ askAiAnswer: { text: outText, createdAt: Date.now(), outOfDomain: true } }),
+        });
+        await speakHostLine(outText);
+        return;
+      }
+
+      await speakHostLine('Let me think…');
+      try {
+        const res = await fetch('/api/ask-ai-answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questionText: askAiQuestion.text }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        const answerText = payload?.answerText || 'I am not sure, please ask me in another way.';
+        await fetch(`/api/admin/session/${encodeURIComponent(session.sessionId)}/meta`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ askAiAnswer: { text: answerText, createdAt: Date.now() } }),
+        });
+        await speakHostLine(answerText);
+      } catch {
+        const fallback = 'I am not sure, please ask me in another way.';
+        await fetch(`/api/admin/session/${encodeURIComponent(session.sessionId)}/meta`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ askAiAnswer: { text: fallback, createdAt: Date.now() } }),
+        });
+        await speakHostLine(fallback);
+      }
+    };
+
+    run();
+  }, [audioUnlocked, session, speakHostLine]);
+
+  useEffect(() => {
+    if (!audioUnlocked || session?.gameMode !== 'ASK_AI') return;
+    const announcement = session?.askAiAnnouncement;
+    if (!announcement?.createdAt || askAiHandledAnnouncementRef.current === announcement.createdAt) return;
+    askAiHandledAnnouncementRef.current = announcement.createdAt;
+    speakHostLine(announcement.text || '');
+  }, [audioUnlocked, session, speakHostLine]);
 
 
 
@@ -637,15 +728,15 @@ export default function DisplayPage() {
                 </button>
               </div>
 
-              {leaderboard.length > 0 && (
+              {leaderboardWithAi.length > 0 && (
                 <div className="mt-6 grid gap-4 md:grid-cols-2 px-6 md:px-10">
                   <div className="rounded-3xl border border-cyan-300/25 bg-cyan-500/10 px-7 py-6 shadow-[0_0_60px_rgba(6,182,212,0.18)]">
                     <p className="text-xs uppercase tracking-[0.32em] text-cyan-100/75 font-black">Leading Team</p>
-                    <p className="mt-2 text-4xl md:text-5xl font-black text-cyan-100">{formatTeamName(leaderboard[0]?.name)}</p>
+                    <p className="mt-2 text-4xl md:text-5xl font-black text-cyan-100">{formatTeamName(leaderboardWithAi[0]?.name)}</p>
                   </div>
                   <div className="rounded-3xl border border-fuchsia-300/25 bg-fuchsia-500/10 px-7 py-6 shadow-[0_0_60px_rgba(217,70,239,0.18)]">
                     <p className="text-xs uppercase tracking-[0.32em] text-fuchsia-100/75 font-black">Lead Score</p>
-                    <p className="mt-2 text-4xl md:text-5xl font-black text-fuchsia-100 tabular-nums">{leaderboard[0]?.total ?? 0}</p>
+                    <p className="mt-2 text-4xl md:text-5xl font-black text-fuchsia-100 tabular-nums">{leaderboardWithAi[0]?.grandTotal ?? 0}</p>
                   </div>
                 </div>
               )}
@@ -659,11 +750,12 @@ export default function DisplayPage() {
                         <th className="px-6 md:px-10 py-5 md:py-6">Team</th>
                         <th className="px-6 md:px-10 py-5 md:py-6 text-center">Standard</th>
                         <th className="px-6 md:px-10 py-5 md:py-6 text-center">Buzzer</th>
-                        <th className="px-6 md:px-10 py-5 md:py-6 text-center text-amber-200">Total Points</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6 text-center">AI Challenge</th>
+                        <th className="px-6 md:px-10 py-5 md:py-6 text-center text-amber-200">Grand Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {leaderboard.map((team: any, index: number) => (
+                      {leaderboardWithAi.map((team: any, index: number) => (
                         <tr key={index} className="transition-all duration-300 hover:bg-white/8">
                           <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-white/80">{index + 1}</td>
                           <td className="px-6 md:px-10 py-7 md:py-8 text-center">
@@ -671,7 +763,8 @@ export default function DisplayPage() {
                           </td>
                           <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-cyan-100 tabular-nums">{team.standard}</td>
                           <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-fuchsia-100 tabular-nums">{team.buzzer}</td>
-                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-5xl md:text-7xl text-amber-200 bg-amber-300/[0.10] tabular-nums">{team.total}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-3xl md:text-5xl text-emerald-100 tabular-nums">{team.aiChallenge}</td>
+                          <td className="px-6 md:px-10 py-7 md:py-8 text-center font-mono font-black text-5xl md:text-7xl text-amber-200 bg-amber-300/[0.10] tabular-nums">{team.grandTotal}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -719,7 +812,14 @@ export default function DisplayPage() {
                 <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
 
                 <div className="relative px-10 py-16 lg:px-14 lg:py-20 text-center">
-                  {currentQuestion ? (
+                  {session?.gameMode === 'ASK_AI' ? (
+                    <div className="space-y-6">
+                      <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-emerald-100">ASK AI ROUND</h1>
+                      <p className="text-xl text-cyan-100">Question for Team {formatTeamName(session?.concernTeamName) || session?.concernTeamId || 'Team'}</p>
+                      <p className="text-2xl text-white">{session?.askAiQuestion?.text || 'Waiting for the team question…'}</p>
+                      {session?.askAiAnswer?.text && <p className="text-xl text-amber-100">{session.askAiAnswer.text}</p>}
+                    </div>
+                  ) : currentQuestion ? (
                     <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-white drop-shadow-[0_18px_50px_rgba(0,0,0,0.55)] animate-[questionGlow_9s_ease-in-out_infinite]">
                       {currentQuestion.text}
                     </h1>

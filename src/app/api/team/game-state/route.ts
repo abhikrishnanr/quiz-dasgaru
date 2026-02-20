@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
 
         const sessionDetails = data as AdminSessionDetails;
         const { session, questions } = sessionDetails;
+        const concernTeam = sessionDetails.teams.find((team) => team.teamId === session.concernTeamId);
+
 
         // 3. Determine State
         const currentState = session.questionState; // PREVIEW | LIVE | LOCKED | REVEALED
@@ -35,7 +37,18 @@ export async function GET(request: NextRequest) {
         if (!currentQId) {
             return NextResponse.json({
                 state: "WAITING",
-                message: "No active question"
+                message: "No active question",
+                mode: session.gameMode || 'STANDARD',
+                concernTeamId: session.concernTeamId,
+                concernTeamName: concernTeam?.teamName,
+                buzzOwnerTeamId: session.buzzOwnerTeamId,
+                askAiQuestion: (session as any).askAiQuestion || null,
+                askAiAnswer: (session as any).askAiAnswer || null,
+                askAiMark: (session as any).askAiMark || null,
+                askAiAnnouncement: (session as any).askAiAnnouncement || null,
+                serverNowEpochMs: Date.now(),
+                questionStartedAt: session.questionStartedAt,
+                timerDurationSec: session.timerDurationSec || 20,
             });
         }
 
@@ -60,7 +73,12 @@ export async function GET(request: NextRequest) {
             },
             mode: session.gameMode || 'STANDARD',
             concernTeamId: session.concernTeamId,
+            concernTeamName: concernTeam?.teamName,
             buzzOwnerTeamId: session.buzzOwnerTeamId,
+            askAiQuestion: (session as any).askAiQuestion || null,
+            askAiAnswer: (session as any).askAiAnswer || null,
+            askAiMark: (session as any).askAiMark || null,
+            askAiAnnouncement: (session as any).askAiAnnouncement || null,
             // Timer Sync Data
             serverNowEpochMs: Date.now(),
             questionStartedAt: session.questionStartedAt,

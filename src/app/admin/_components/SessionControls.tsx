@@ -7,6 +7,7 @@ import { emitToast } from "@/src/lib/ui/toast";
 import { generateDisplayToken } from "@/src/lib/security";
 import { getTTSAudio } from "@/src/services/aiService";
 import { formatTeamName } from "@/src/lib/format";
+import { addAiScore, loadAiScores, setAiScore } from '@/src/lib/aiChallengeScores';
 
 interface SessionControlsProps {
     sessionId: string;
@@ -14,8 +15,8 @@ interface SessionControlsProps {
     teams: AdminSessionDetails['teams'];
     onRefresh: () => void;
     variant?: 'default' | 'compact';
-    gameMode: 'STANDARD' | 'BUZZER' | null;
-    setGameMode: (mode: 'STANDARD' | 'BUZZER') => void;
+    gameMode: 'STANDARD' | 'BUZZER' | 'ASK_AI' | null;
+    setGameMode: (mode: 'STANDARD' | 'BUZZER' | 'ASK_AI') => void;
     concernTeamId: string;
     setConcernTeamId: (id: string) => void;
 }
@@ -34,6 +35,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
     // Live audio status polling from display page
     const [audioStatus, setAudioStatus] = useState<{ status: string; message: string; updatedAt: number }>({ status: 'IDLE', message: '', updatedAt: 0 });
     const [scoreboardActionLoading, setScoreboardActionLoading] = useState(false);
+    const [aiScoreMap, setAiScoreMap] = useState<Record<string, number>>({});
 
     useEffect(() => {
         if (!sessionId) return;
@@ -50,6 +52,10 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         const interval = setInterval(poll, 1000);
         return () => clearInterval(interval);
     }, [sessionId]);
+
+    useEffect(() => {
+        setAiScoreMap(loadAiScores());
+    }, [teams]);
 
     // Test audio trigger from admin
     const [isTestingAudio, setIsTestingAudio] = useState(false);
@@ -154,7 +160,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
         runAction('Start', () => postJson(`/api/admin/session/${sessionId}/start`, {
             autoStartTimer: true,
             gameMode,
-            concernTeamId: gameMode === 'STANDARD' ? concernTeamId : null
+            concernTeamId: gameMode === 'BUZZER' ? null : concernTeamId
         }));
     };
 
@@ -182,6 +188,50 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
             setScoreboardActionLoading(false);
         }
     };
+
+    const updateAiScore = (teamId: string, value: number) => {
+        const next = setAiScore(teamId, value);
+        setAiScoreMap({ ...next });
+    };
+
+    const handleAskAiMark = async (mark: 'RIGHT' | 'WRONG') => {
+        const selectedTeam = teams.find((t: any) => t.teamId === concernTeamId);
+        const selectedTeamName = formatTeamName(selectedTeam?.teamName) || `Team ${concernTeamId}`;
+        const basePayload: any = { askAiMark: mark };
+
+        if (mark === 'WRONG' && concernTeamId) {
+            const nextScores = addAiScore(concernTeamId, 20);
+            setAiScoreMap({ ...nextScores });
+            basePayload.askAiAnnouncement = { text: `Team ${selectedTeamName} gets 20 points.`, createdAt: Date.now() };
+        }
+
+        await runAction(`ASK AI ${mark}`, () => postJson(`/api/admin/session/${sessionId}/meta`, basePayload));
+    };
+
+
+    const handleEnableAskAiRound = async () => {
+        if (!concernTeamId) {
+            emitToast({ level: 'error', title: 'Team Required', message: 'Please select a team for ASK AI round.' });
+            return;
+        }
+
+        const selectedTeam = teams.find((t: any) => t.teamId === concernTeamId);
+        const selectedTeamName = formatTeamName(selectedTeam?.teamName) || `Team ${concernTeamId}`;
+        setGameMode('ASK_AI');
+
+        await runAction('Enable ASK AI Round', () => postJson(`/api/admin/session/${sessionId}/meta`, {
+            gameMode: 'ASK_AI',
+            concernTeamId,
+            askAiQuestion: null,
+            askAiAnswer: null,
+            askAiMark: null,
+            askAiAnnouncement: {
+                text: `ASK AI round is now active for Team ${selectedTeamName}.`,
+                createdAt: Date.now(),
+            },
+        }));
+    };
+
 
 
     if (variant === 'compact') {
@@ -251,6 +301,29 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-[11px] px-3 py-2 rounded-lg font-black uppercase tracking-wide disabled:opacity-50"
                     >
                         Close + Stop Audio
+                    </button>
+                </div>
+
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 space-y-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">ASK AI Round Controls</div>
+                    <div className="grid grid-cols-2 gap-2">
+                        {teams.map((team: any) => (
+                            <button
+                                key={`ask-ai-team-compact-${team.teamId}`}
+                                onClick={() => setConcernTeamId(team.teamId)}
+                                className={`px-2 py-2 rounded text-[11px] font-bold border ${concernTeamId === team.teamId ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-200'}`}
+                            >
+                                {formatTeamName(team.teamName)}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        disabled={!!loadingAction || !concernTeamId}
+                        onClick={handleEnableAskAiRound}
+                        className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-xs font-black uppercase tracking-wide disabled:opacity-50"
+                    >
+                        Enable ASK AI
                     </button>
                 </div>
 
@@ -537,6 +610,63 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         @keyframes progressIndeterminateD { 0% { width: 15%; margin-left: 0; } 50% { width: 50%; margin-left: 25%; } 100% { width: 15%; margin-left: 85%; } }
                     `}</style>
 
+
+
+                    <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/10 p-3 space-y-3">
+                        <div className="text-xs font-bold uppercase tracking-wider text-emerald-200">ASK AI Round Controls</div>
+                        <p className="text-[11px] text-emerald-100/90">Separate controls for ASK AI. Select team, enable round, then mark RIGHT/WRONG after response.</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {teams.map((team: any) => (
+                                <button
+                                    key={`ask-ai-team-${team.teamId}`}
+                                    onClick={() => setConcernTeamId(team.teamId)}
+                                    className={`px-2 py-2 rounded text-[11px] font-bold border transition ${concernTeamId === team.teamId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-900 text-emerald-100 border-emerald-800/60 hover:border-emerald-600'}`}
+                                >
+                                    {formatTeamName(team.teamName)}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            disabled={!!loadingAction || !concernTeamId}
+                            onClick={handleEnableAskAiRound}
+                            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 text-xs font-black uppercase tracking-wide disabled:opacity-50"
+                        >
+                            Enable ASK AI
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                disabled={!!loadingAction || !concernTeamId}
+                                onClick={() => handleAskAiMark('RIGHT')}
+                                className="px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs disabled:opacity-50"
+                            >
+                                RIGHT
+                            </button>
+                            <button
+                                disabled={!!loadingAction || !concernTeamId}
+                                onClick={() => handleAskAiMark('WRONG')}
+                                className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-50"
+                            >
+                                WRONG (+20)
+                            </button>
+                        </div>
+                        <div>
+                            <div className="text-[10px] text-emerald-100/80 uppercase tracking-wider mb-2">AI Challenge Score Editor</div>
+                            <div className="space-y-2">
+                                {teams.map((team: any) => (
+                                    <div key={`ai-score-${team.teamId}`} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="text-white/80 truncate">{formatTeamName(team.teamName)}</span>
+                                        <input
+                                            type="number"
+                                            value={aiScoreMap[team.teamId] ?? 0}
+                                            onChange={(event) => updateAiScore(team.teamId, Number(event.target.value || 0))}
+                                            className="w-24 rounded border border-white/20 bg-slate-900/70 px-2 py-1 text-right text-white"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex flex-col gap-2">
                         {!isLive && (
@@ -551,7 +681,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                 <span className="text-lg">▶</span>
                                 {gameMode === 'STANDARD' && concernTeamId
                                     ? `START (${formatTeamName(teams.find((t: any) => t.teamId === concernTeamId)?.teamName)})`
-                                    : 'START ROUND'}
+                                    : gameMode === 'BUZZER' ? 'START BUZZER ROUND' : 'START ROUND'}
                             </button>
                         )}
 

@@ -98,7 +98,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
     };
 
     // Hoisted State for Controls
-    const [gameMode, setGameMode] = useState<'STANDARD' | 'BUZZER'>('STANDARD');
+    const [gameMode, setGameMode] = useState<'STANDARD' | 'BUZZER' | 'ASK_AI'>('STANDARD');
     const [concernTeamId, setConcernTeamId] = useState<string>('');
     const lastMetaUpdateRef = useRef<number>(0);
 
@@ -122,12 +122,9 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
 
 
 
-    const handleGameModeChange = async (newMode: 'STANDARD' | 'BUZZER') => {
+    const handleGameModeChange = async (newMode: 'STANDARD' | 'BUZZER' | 'ASK_AI') => {
         setGameMode(newMode); // Optimistic update
         lastMetaUpdateRef.current = Date.now();
-        if (newMode === 'BUZZER') {
-            setConcernTeamId('');
-        }
 
 
         try {
@@ -150,7 +147,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
                 theme: details.session.theme,
                 organizer: details.session.organizer,
                 gameMode: newMode,
-                concernTeamId: newMode === 'BUZZER' ? null : details.session.concernTeamId
+                concernTeamId: newMode === 'BUZZER' ? null : (concernTeamId || details.session.concernTeamId || null)
             };
 
 
@@ -177,7 +174,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
         }
     };
 
-    const handleSetActiveQuestion = async (questionId: string, overrideMode?: 'STANDARD' | 'BUZZER') => {
+    const handleSetActiveQuestion = async (questionId: string, overrideMode?: 'STANDARD' | 'BUZZER' | 'ASK_AI') => {
         const activeMode = overrideMode || gameMode;
         try {
             const payload: any = {
@@ -187,7 +184,7 @@ export function SessionDetailView({ sessionId, onBack }: SessionDetailViewProps)
 
 
 
-            if (activeMode === 'STANDARD' && concernTeamId) {
+            if ((activeMode === 'STANDARD' || activeMode === 'ASK_AI') && concernTeamId) {
                 payload.concernTeamId = concernTeamId;
                 payload.allowedTeamIds = [concernTeamId];
                 payload.allowedTeams = { teamIds: [concernTeamId] };

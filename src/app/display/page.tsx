@@ -23,7 +23,7 @@ type CurrentResponse = {
   questionStartedAt?: string | number;
   timerDurationSec?: number;
   serverNowEpochMs?: number;
-  mode?: 'STANDARD' | 'BUZZER'; // Added game mode
+  mode?: 'STANDARD' | 'BUZZER' | 'ASK_AI'; // Added game mode
 };
 
 type LeaderboardEntry = {
