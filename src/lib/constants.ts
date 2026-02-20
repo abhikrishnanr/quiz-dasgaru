@@ -6,7 +6,7 @@ export const HOST_SCRIPTS = {
 
 export const AI_COMMENTS = {
   CORRECT: ['Kalakki!', 'Polichu!', 'Mass!', 'Pwoli answer!', 'Kidilan move!'],
-  WRONG: ['Shokam...', 'Enthonnade ithu?', 'Chathi Kule!', 'Ayyayyo poyi!', 'Ithu sheriyalla ketto.'],
+  WRONG: ['Shokam...', 'Enthonnade ithu?', 'Chathichallo!', 'Ayyayyo poyi!', 'Ithu sheriyalla ketto.'],
 } as const;
 
 export function constructVerdict(
