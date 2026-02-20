@@ -19,6 +19,7 @@ export default function DisplayPage() {
   const isSpeakingHostRef = useRef(false);
   const revealAnnouncementKeyRef = useRef('');
   const lowTimeWarningQuestionRef = useRef('');
+  const lockAnnouncementKeyRef = useRef('');
   const [isScorePanelOpen, setIsScorePanelOpen] = useState(false);
   const [hostTranscript, setHostTranscript] = useState<string[]>([]);
   const { speak, isFetching, isSpeaking, unlock } = useAudioController();
@@ -205,6 +206,27 @@ export default function DisplayPage() {
   const concernTeamName = formatTeamName(session?.concernTeamName) || 'Concerned Team';
 
   useEffect(() => {
+    if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId || !concernTeamAnswer) return;
+
+    const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
+    const lockKey = `${questionKey}-${concernTeamAnswer.action}-${concernTeamAnswer.selectedKey ?? ''}`;
+    if (lockAnnouncementKeyRef.current === lockKey) return;
+
+    const teamLabel = formatTeamName(concernTeamAnswer.teamName) || concernTeamName;
+    const lockMessage = concernTeamAnswer.action === 'PASS'
+      ? `${teamLabel}, PASS submitted.`
+      : concernTeamAnswer.action === 'BUZZ'
+        ? `${teamLabel}, BUZZ received.`
+        : `${teamLabel} locked option ${concernTeamAnswer.selectedKey}.`;
+
+    speakHostLine(lockMessage).then((played) => {
+      if (played) {
+        lockAnnouncementKeyRef.current = lockKey;
+      }
+    });
+  }, [audioUnlocked, concernTeamAnswer, concernTeamName, currentQuestion, isLive, session?.concernTeamId, speakHostLine]);
+
+  useEffect(() => {
     if (!audioUnlocked || !isLive || !currentQuestion || !session?.concernTeamId) return;
 
     const questionKey = `${currentQuestion.id ?? currentQuestion.text ?? 'unknown'}-${session.concernTeamId}`;
@@ -246,9 +268,13 @@ export default function DisplayPage() {
       ? `The right answer is ${correctOption.key}. ${correctOption.text}.`
       : `The right answer is ${currentQuestion.correctAnswer}.`;
 
+    const selectedLine = concernTeamAnswer.selectedKey
+      ? `${concernTeamName} locked option ${concernTeamAnswer.selectedKey}.`
+      : `${concernTeamName} submitted an answer.`;
+
     const revealMessage = isCorrectSelection
-      ? `${concernTeamName.toUpperCase()}, THAT IS ABSOLUTELY CORRECT! FANTASTIC JOB! KEEP THE MOMENTUM GOING! ${correctAnswerLine}`
-      : `${concernTeamName.toUpperCase()}, THAT IS WRONG! DON'T DROP YOUR ENERGY — COME BACK STRONGER ON THE NEXT QUESTION! ${correctAnswerLine}`;
+      ? `${selectedLine} That is the right answer.`
+      : `${selectedLine} That is wrong. ${correctAnswerLine}`;
 
     speakHostLine(revealMessage).then((played) => {
       if (played) {
