@@ -255,10 +255,16 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         >
                             Buzzer
                         </button>
+                        <button
+                            onClick={() => setGameMode('ASK_AI')}
+                            className={`flex-1 px-2 py-1.5 text-xs rounded-md transition-all uppercase font-black tracking-wide ${gameMode === 'ASK_AI' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            Ask AI
+                        </button>
                     </div>
 
                     {/* Team Badges for Standard Mode */}
-                    {!isLive && gameMode === 'STANDARD' && (
+                    {!isLive && (gameMode === 'STANDARD' || gameMode === 'ASK_AI') && (
                         <div className="flex flex-col gap-1.5 animate-in slide-in-from-top-2">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Team to Answer:</span>
                             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
@@ -397,7 +403,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                 <div className="flex items-center gap-2">
                     {!isLive && (
                         <button
-                            disabled={!!loadingAction || (gameMode === 'STANDARD' && !concernTeamId)}
+                            disabled={!!loadingAction || (gameMode !== 'BUZZER' && !concernTeamId)}
                             onClick={handleStart}
                             className={`flex-1 text-xs px-3 py-2 rounded font-bold shadow-sm flex items-center justify-center gap-1 transition-all ${gameMode === 'STANDARD'
                                 ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
@@ -405,7 +411,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                 }`}
                         >
                             <span>▶</span>
-                            {gameMode === 'STANDARD' && concernTeamId
+                            {gameMode !== 'BUZZER' && concernTeamId
                                 ? `START FOR ${selectedTeamName || 'TEAM'}`
                                 : gameMode === 'BUZZER' ? 'START BUZZER ROUND' : 'START ROUND'}
                         </button>
@@ -495,10 +501,16 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                         >
                             Buzzer
                         </button>
+                        <button
+                            onClick={() => setGameMode('ASK_AI')}
+                            className={`flex-1 px-2 py-1.5 text-xs rounded-md transition-all uppercase font-black tracking-wide ${gameMode === 'ASK_AI' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+                        >
+                            Ask AI
+                        </button>
                     </div>
 
                     {/* Team Badges for Standard Mode */}
-                    {!isLive && gameMode === 'STANDARD' && (
+                    {!isLive && (gameMode === 'STANDARD' || gameMode === 'ASK_AI') && (
                         <div className="flex flex-col gap-2 animate-in slide-in-from-top-2">
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Target Team:</span>
                             <div className="grid grid-cols-2 gap-2">
@@ -671,7 +683,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                     <div className="flex flex-col gap-2">
                         {!isLive && (
                             <button
-                                disabled={!!loadingAction || (gameMode === 'STANDARD' && !concernTeamId)}
+                                disabled={!!loadingAction || (gameMode !== 'BUZZER' && !concernTeamId)}
                                 onClick={handleStart}
                                 className={`w-full text-xs px-3 py-3 rounded-lg font-bold shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all transform active:scale-95 ${gameMode === 'STANDARD'
                                     ? 'bg-indigo-500 hover:bg-indigo-400 text-white'
@@ -679,7 +691,7 @@ export function SessionControls({ sessionId, initialState, teams, onRefresh, var
                                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                                 <span className="text-lg">▶</span>
-                                {gameMode === 'STANDARD' && concernTeamId
+                                {gameMode !== 'BUZZER' && concernTeamId
                                     ? `START (${formatTeamName(teams.find((t: any) => t.teamId === concernTeamId)?.teamName)})`
                                     : gameMode === 'BUZZER' ? 'START BUZZER ROUND' : 'START ROUND'}
                             </button>
